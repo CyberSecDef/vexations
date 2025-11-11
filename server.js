@@ -25,6 +25,75 @@ const rollDice = () => {
   return Math.floor(Math.random() * 6) + 1;
 };
 
+// Game helper functions
+const getHomePositions = (playerIndex) => {
+  const homes = [
+    [101, 102, 103, 104],
+    [201, 202, 203, 204],
+    [301, 302, 303, 304],
+    [401, 402, 403, 404]
+  ];
+  return homes[playerIndex] || [];
+};
+
+const getStartPosition = (playerIndex) => {
+  return [0, 14, 28, 42][playerIndex] || 0;
+};
+
+const isHomePosition = (position, playerIndex) => {
+  return getHomePositions(playerIndex).includes(position);
+};
+
+const canMoveFromHome = (diceValue) => {
+  return diceValue === 1 || diceValue === 6;
+};
+
+const getNextPosition = (currentPosition, steps, playerIndex) => {
+  if (isHomePosition(currentPosition, playerIndex)) {
+    if (canMoveFromHome(steps)) {
+      return getStartPosition(playerIndex);
+    }
+    return null;
+  }
+  
+  const nextPos = (currentPosition + steps) % 56;
+  return nextPos;
+};
+
+const hasValidMoves = (game, playerIndex, diceValue) => {
+  const player = game.players[playerIndex];
+  if (!player) return false;
+  
+  for (let i = 0; i < player.marbles.length; i++) {
+    const pos = player.marbles[i];
+    
+    if (isHomePosition(pos, playerIndex)) {
+      if (canMoveFromHome(diceValue)) return true;
+    } else {
+      const newPos = getNextPosition(pos, diceValue, playerIndex);
+      if (newPos !== null && !wouldBlockSelf(player.marbles, i, newPos)) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+const wouldBlockSelf = (marbles, movingIndex, targetPosition) => {
+  for (let i = 0; i < marbles.length; i++) {
+    if (i !== movingIndex && marbles[i] === targetPosition) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const advanceTurn = (game) => {
+  game.player_index = (game.player_index + 1) % game.players.length;
+  game.phase = 'awaiting_roll';
+  game.last_roll = null;
+};
+
 const app = express();
 
 app.use((req, res, next) => {
@@ -82,8 +151,9 @@ function sanitizeName(name) {
 
 function logEvent(game, message) {
   const entry = { ts: Date.now(), message };
-  //state.games.get(game).eventLog.push(entry);
-  //if (state.eventLog.length > 500) state.eventLog.shift();
+  if (!game.event_log) game.event_log = [];
+  game.event_log.push(entry);
+  if (game.event_log.length > 100) game.event_log.shift();
   broadcast({ type: "eventLog", event: entry });
 }
 
@@ -113,20 +183,82 @@ wss.on("connection", (ws) => {
         if (!msg.playerId || !msg.gameCode) return;
         if (!state.players[msg.playerId]) return;
         if (!state.games[msg.gameCode]) return;
+        const game = state.games[msg.gameCode];
         if (
-          state.games[msg.gameCode].players.filter((e, i) => {
+          game.players.filter((e, i) => {
             return e.id == msg.playerId;
           }).length <= 0
         )
           return;
-        if (
-          state.games[msg.gameCode].players[
-            state.games[msg.gameCode].player_index
-          ].id != msg.playerId
-        )
-          return;
-        send(ws, { type: "dice_roll", dice: rollDice() });
+        if (game.players[game.player_index].id != msg.playerId) return;
+        if (game.phase !== 'awaiting_roll') return;
+        
+        const diceValue = rollDice();
+        game.last_roll = diceValue;
+        game.phase = 'awaiting_move';
+        
+        logEvent(game, `${state.players[msg.playerId].name} rolled a ${diceValue}`);
+        
+        if (!hasValidMoves(game, game.player_index, diceValue)) {
+          logEvent(game, `No valid moves available. Turn skipped.`);
+          advanceTurn(game);
+        }
+        
+        broadcast({ type: "dice_roll", dice: diceValue });
+        broadcast({ type: "game_info", game: game, s: state });
 
+        break;
+      case "move_marble":
+        if (!msg.playerId || !msg.gameCode || msg.marbleIndex === undefined) return;
+        if (!state.players[msg.playerId]) return;
+        if (!state.games[msg.gameCode]) return;
+        
+        const moveGame = state.games[msg.gameCode];
+        if (moveGame.players.filter(e => e.id == msg.playerId).length <= 0) return;
+        if (moveGame.players[moveGame.player_index].id != msg.playerId) return;
+        if (moveGame.phase !== 'awaiting_move') return;
+        if (!moveGame.last_roll) return;
+        
+        const currentPlayer = moveGame.players[moveGame.player_index];
+        const marbleIndex = msg.marbleIndex;
+        
+        if (marbleIndex < 0 || marbleIndex >= currentPlayer.marbles.length) return;
+        
+        const currentPos = currentPlayer.marbles[marbleIndex];
+        const newPos = getNextPosition(currentPos, moveGame.last_roll, moveGame.player_index);
+        
+        if (newPos === null) return;
+        if (wouldBlockSelf(currentPlayer.marbles, marbleIndex, newPos)) return;
+        
+        currentPlayer.marbles[marbleIndex] = newPos;
+        
+        logEvent(moveGame, `${state.players[msg.playerId].name} moved marble to position ${newPos}`);
+        
+        // Check for collisions with other players
+        for (let i = 0; i < moveGame.players.length; i++) {
+          if (i !== moveGame.player_index) {
+            const otherPlayer = moveGame.players[i];
+            for (let j = 0; j < otherPlayer.marbles.length; j++) {
+              if (otherPlayer.marbles[j] === newPos && !isHomePosition(newPos, i)) {
+                const homePos = getHomePositions(i)[j];
+                otherPlayer.marbles[j] = homePos;
+                const otherPlayerName = state.players[otherPlayer.id]?.name || 'Player';
+                logEvent(moveGame, `${otherPlayerName}'s marble was sent home!`);
+              }
+            }
+          }
+        }
+        
+        // Handle turn advancement
+        if (moveGame.last_roll === 6) {
+          logEvent(moveGame, `${state.players[msg.playerId].name} rolled a 6 and gets another turn!`);
+          moveGame.phase = 'awaiting_roll';
+          moveGame.last_roll = null;
+        } else {
+          advanceTurn(moveGame);
+        }
+        
+        broadcast({ type: "game_info", game: moveGame, s: state });
         break;
       case "heartbeat":
         if (!msg.playerId || !msg.gameCode) return;
@@ -174,6 +306,9 @@ wss.on("connection", (ws) => {
         g.code = gameCode;
         g.players = [];
         g.player_index = 0;
+        g.phase = 'awaiting_roll';
+        g.last_roll = null;
+        g.event_log = [];
         state.games[gameCode] = g;
 
         send(ws, { type: "game_info", game: state.games[gameCode], s: state });
