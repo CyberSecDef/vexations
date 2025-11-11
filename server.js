@@ -133,7 +133,7 @@ wss.on('connection', (ws) => {
 
         let p = {
           id: msg.playerId,
-          marbles: [0, 101, 102, 103]
+          marbles: [100, 101, 102, 103]
         }
         state.games[msg.gameCode].players.push(p)
 
