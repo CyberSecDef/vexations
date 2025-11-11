@@ -66,14 +66,9 @@ const hasValidMoves = (game, playerIndex, diceValue) => {
   
   for (let i = 0; i < player.marbles.length; i++) {
     const pos = player.marbles[i];
-    
-    if (isHomePosition(pos, playerIndex)) {
-      if (canMoveFromHome(diceValue)) return true;
-    } else {
-      const newPos = getNextPosition(pos, diceValue, playerIndex);
-      if (newPos !== null && !wouldBlockSelf(player.marbles, i, newPos)) {
-        return true;
-      }
+    const validDests = getValidDestinations(pos, diceValue, playerIndex, player.marbles, i);
+    if (validDests.length > 0) {
+      return true;
     }
   }
   return false;
@@ -92,6 +87,78 @@ const advanceTurn = (game) => {
   game.player_index = (game.player_index + 1) % game.players.length;
   game.phase = 'awaiting_roll';
   game.last_roll = null;
+};
+
+// Star space positions on the path
+const STAR_POSITIONS = [7, 21, 35, 49];
+
+const isStarPosition = (position) => {
+  return STAR_POSITIONS.includes(position);
+};
+
+// Calculate all valid destinations from a position with given steps
+// Returns array of possible destination positions (only positions using EXACT steps)
+// Uses step-by-step BFS to handle reaching stars mid-move
+const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
+  // If in home, can only move to start position with 1 or 6
+  if (isHomePosition(currentPosition, playerIndex)) {
+    if (canMoveFromHome(steps)) {
+      const startPos = getStartPosition(playerIndex);
+      if (!wouldBlockSelf(allMarbles, movingIndex, startPos)) {
+        return [startPos];
+      }
+    }
+    return [];
+  }
+  
+  // BFS to explore all paths step-by-step
+  // State: {pos, stepsLeft, visitedStars}
+  const queue = [{pos: currentPosition, stepsLeft: steps, visitedStars: new Set()}];
+  const reachable = new Set();
+  const visited = new Map(); // key: "pos,stepsLeft,visitedStars", value: true
+  
+  const makeKey = (pos, stepsLeft, visitedStars) => {
+    const starList = Array.from(visitedStars).sort().join(',');
+    return `${pos},${stepsLeft},${starList}`;
+  };
+  
+  while (queue.length > 0) {
+    const {pos, stepsLeft, visitedStars} = queue.shift();
+    const key = makeKey(pos, stepsLeft, visitedStars);
+    
+    if (visited.has(key)) continue;
+    visited.set(key, true);
+    
+    // If we've used all steps, this is a valid destination
+    if (stepsLeft === 0) {
+      if (pos !== currentPosition && !wouldBlockSelf(allMarbles, movingIndex, pos)) {
+        reachable.add(pos);
+      }
+      continue;
+    }
+    
+    // If on a star, we have two options:
+    if (isStarPosition(pos)) {
+      // Option 1: Move 1 step forward along the path
+      const nextPos = (pos + 1) % 56;
+      queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
+      
+      // Option 2: Hop to another unvisited star (costs 1 step)
+      for (const starPos of STAR_POSITIONS) {
+        if (starPos !== pos && !visitedStars.has(starPos)) {
+          const newVisited = new Set(visitedStars);
+          newVisited.add(starPos);
+          queue.push({pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited});
+        }
+      }
+    } else {
+      // Not on a star - can only move forward 1 step
+      const nextPos = (pos + 1) % 56;
+      queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
+    }
+  }
+  
+  return Array.from(reachable);
 };
 
 const app = express();
@@ -209,7 +276,7 @@ wss.on("connection", (ws) => {
 
         break;
       case "move_marble":
-        if (!msg.playerId || !msg.gameCode || msg.marbleIndex === undefined) return;
+        if (!msg.playerId || !msg.gameCode || msg.marbleIndex === undefined || msg.destination === undefined) return;
         if (!state.players[msg.playerId]) return;
         if (!state.games[msg.gameCode]) return;
         
@@ -221,25 +288,33 @@ wss.on("connection", (ws) => {
         
         const currentPlayer = moveGame.players[moveGame.player_index];
         const marbleIndex = msg.marbleIndex;
+        const destination = msg.destination;
         
         if (marbleIndex < 0 || marbleIndex >= currentPlayer.marbles.length) return;
         
         const currentPos = currentPlayer.marbles[marbleIndex];
-        const newPos = getNextPosition(currentPos, moveGame.last_roll, moveGame.player_index);
         
-        if (newPos === null) return;
-        if (wouldBlockSelf(currentPlayer.marbles, marbleIndex, newPos)) return;
+        // Get all valid destinations and check if the requested destination is valid
+        const validDestinations = getValidDestinations(
+          currentPos, 
+          moveGame.last_roll, 
+          moveGame.player_index,
+          currentPlayer.marbles,
+          marbleIndex
+        );
         
-        currentPlayer.marbles[marbleIndex] = newPos;
+        if (!validDestinations.includes(destination)) return;
         
-        logEvent(moveGame, `${state.players[msg.playerId].name} moved marble to position ${newPos}`);
+        currentPlayer.marbles[marbleIndex] = destination;
+        
+        logEvent(moveGame, `${state.players[msg.playerId].name} moved marble to position ${destination}`);
         
         // Check for collisions with other players
         for (let i = 0; i < moveGame.players.length; i++) {
           if (i !== moveGame.player_index) {
             const otherPlayer = moveGame.players[i];
             for (let j = 0; j < otherPlayer.marbles.length; j++) {
-              if (otherPlayer.marbles[j] === newPos && !isHomePosition(newPos, i)) {
+              if (otherPlayer.marbles[j] === destination && !isHomePosition(destination, i)) {
                 const homePos = getHomePositions(i)[j];
                 otherPlayer.marbles[j] = homePos;
                 const otherPlayerName = state.players[otherPlayer.id]?.name || 'Player';
