@@ -288,9 +288,10 @@ wss.on("connection", (ws) => {
         }
         if (state.games[msg.gameCode].players.length >= 4) return;
 
+        const newPlayerIndex = state.games[msg.gameCode].players.length;
         let p = {
           id: msg.playerId,
-          marbles: [10, 101, 102, 103],
+          marbles: getHomePositions(newPlayerIndex),
         };
         state.games[msg.gameCode].players.push(p);
 
