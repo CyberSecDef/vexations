@@ -209,9 +209,6 @@
     }
     // init browser
     function init() {
-        document.getElementsByClassName('board-space').forEach( (e,i) => {
-            
-        })
         for (let y = 0; y < 19; y++) {
             for (let x = 0; x < 19; x++) {
 

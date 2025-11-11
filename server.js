@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const WebSocket = require('ws');
 
 const HOST = "0.0.0.0"
-const PORT = 8010;
+const PORT = Number(process.env.PORT) || 5000;
 const PING_INTERVAL_MS = 20_000;
 
 const token8 = () => {
@@ -25,6 +25,14 @@ const rollDice = () => {
 };
 
 const app = express();
+
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
 
 // Game state
