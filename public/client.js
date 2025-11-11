@@ -154,10 +154,6 @@
                 } else {
                     diceRollBtn.disabled = true;
                 }
-                
-                if (isMyTurn && awaitingMove) {
-                    enableMarbleClicks();
-                }
 
                 msg.game.players.forEach((p, i) => {
                     p.marbles.forEach((m, j) => {
@@ -215,6 +211,10 @@
                         }
                     })
                 })
+                
+                if (isMyTurn && awaitingMove) {
+                    enableMarbleClicks();
+                }
 
                 break;
             case 'identified':
