@@ -1,97 +1,141 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width,initial-scale=1,viewport-fit=cover"
+        />
+        <title>Vexations</title>
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="stylesheet" href="/styles.css" />
 
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>Vexations</title>
-    <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/styles.css" />
+        <link
+            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+            rel="stylesheet"
+            integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+            crossorigin="anonymous"
+        />
+        <script
+            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+            crossorigin="anonymous"
+        ></script>
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
-        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
-        crossorigin="anonymous"></script>
+        <script src="/jquery-3.7.1.min.js"></script>
+    </head>
 
-    <script src="/jquery-3.7.1.min.js"></script>
-
-</head>
-
-<body>
-    <header id="statusBar" class="sticky">
-        <div class="brand">Vexations:
-            <span id="playerName"></span>
-        </div>
-        <div class="status">
-            <span id="connDot" class="dot offline"></span>
-            <span id="connText">Connecting…</span>
-            <span class="sep">•</span>
-            <span>Players: <span id="playerCount">0</span></span>
-        </div>
-    </header>
-
-    <main id="layout">
-
-        <div class="card shadow p-3 mb-5 bg-body-tertiary rounded" style="">
-            <div id="splash">
-                <div class="card-title">
-                    <h3 class="display-1">Vexations</h3>
-                    <p class="card-text">Race your marbles to victory!</p>
-                </div>
-                <div class="card-body">
-                    <h4 class="fw-bold">Get Started</h4>
-                    <p>Enter your name to create or join a game</p>
-
-                    <div class="mb-3">
-                        <label for="nameInput" class="form-label">Your Name</label>
-                        <div id="nameCheck" class="d-none alert alert-danger">Invalid Name</div>
-                        <input class="form-control" id="nameInput" maxlength="32" value="test">
-                        <span id="charsRemainingName">32 characters remaining</span>
-
-                    </div>
-
-                    <div class="mb-3" id="gameCodeDiv">
-                        <label for="gameCode" class="form-label">Game Code</label>
-                        <input type="text" class="form-control" id="gameCode" placeholder="">
-                        <span id="charsRemainingCode">8 characters remaining</span>
-                    </div>
-
-                    <div class="mb-3 text-center">
-                        <button type="button" id="playBtn" class="w-50 btn btn-primary">Play</button>
-                    </div>
-                </div>
+    <body>
+        <header id="statusBar" class="sticky">
+            <div class="brand">
+                Vexations:
+                <span id="playerName"></span>
             </div>
+            <div class="status">
+                <span id="connDot" class="dot offline"></span>
+                <span id="connText">Connecting…</span>
+                <span class="sep">•</span>
+                <span>Players: <span id="playerCount">0</span></span>
+            </div>
+        </header>
 
-            <div class="playarea-container d-none" id="playareaContainer">
-                <div id="playArea" class="playarea">
+        <main id="layout">
+            <div class="card shadow p-3 mb-5 bg-body-tertiary rounded" style="">
+                <div id="splash">
+                    <div class="card-title">
+                        <h3 class="display-1">Vexations</h3>
+                        <p class="card-text">Race your marbles to victory!</p>
+                    </div>
+                    <div class="card-body">
+                        <h4 class="fw-bold">Get Started</h4>
+                        <p>Enter your name to create or join a game</p>
 
-                </div>
-                <div>
-                    <div class="input-group mt-3 mb-3">
-                        <div class="wrap">
-                            <button id="diceRollBtn" class="btn btn-secondary rounded" disabled>
-                                <div id="die" class="die" aria-live="polite" aria-label="Dice result">⚀</div>
+                        <div class="mb-3">
+                            <label for="nameInput" class="form-label"
+                                >Your Name</label
+                            >
+                            <div
+                                id="nameCheck"
+                                class="d-none alert alert-danger"
+                            >
+                                Invalid Name
+                            </div>
+                            <input
+                                class="form-control"
+                                id="nameInput"
+                                maxlength="32"
+                            />
+                            <span id="charsRemainingName"
+                                >32 characters remaining</span
+                            >
+                        </div>
+
+                        <div class="mb-3" id="gameCodeDiv">
+                            <label for="gameCode" class="form-label"
+                                >Game Code</label
+                            >
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="gameCode"
+                                placeholder=""
+                            />
+                            <span id="charsRemainingCode"
+                                >8 characters remaining</span
+                            >
+                        </div>
+
+                        <div class="mb-3 text-center">
+                            <button
+                                type="button"
+                                id="playBtn"
+                                class="w-50 btn btn-primary"
+                            >
+                                Play
                             </button>
                         </div>
                     </div>
                 </div>
+
+                <div class="playarea-container d-none" id="playareaContainer">
+                    <div id="playArea" class="playarea"></div>
+                    <div>
+                        <div class="input-group mt-3 mb-3">
+                            <div class="wrap">
+                                <button
+                                    id="diceRollBtn"
+                                    class="btn btn-secondary rounded"
+                                    disabled
+                                >
+                                    <div
+                                        id="die"
+                                        class="die"
+                                        aria-live="polite"
+                                        aria-label="Dice result"
+                                    >
+                                        ⚀
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <section id="infoArea" class="card">
-            <li>Leaderboard</li>
+            <section id="infoArea" class="card">
+                <li>Leaderboard</li>
 
-            <li>Eventlog</li>
-        </section>
-    </main>
+                <li>Eventlog</li>
+            </section>
+        </main>
 
-    <footer class="tiny">
-        <span>Roll the dice, move your marbles, and aggravate your opponents by sending them back home!</span>
-    </footer>
+        <footer class="tiny">
+            <span
+                >Roll the dice, move your marbles, and aggravate your opponents
+                by sending them back home!</span
+            >
+        </footer>
 
-    <script src="/client.js"></script>
-
-</body>
-
+        <script src="/client.js"></script>
+    </body>
 </html>
