@@ -56,6 +56,8 @@
     let reconnectTimer;
     let heartbeatTimer;
     let autoRefreshTimer;
+    let currentGameState = null;
+    let currentPlayerIndex = -1;
 
     let mask = [
         [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0],
@@ -127,13 +129,34 @@
                 break;
             case 'game_info':
                 game.setCode(msg.game.code)
+                currentGameState = msg.game;
+                
+                // Find current player's index
+                currentPlayerIndex = -1;
+                msg.game.players.forEach((p, i) => {
+                    if (p.id === player.id) {
+                        currentPlayerIndex = i;
+                    }
+                });
+                
                 colorCells()
+                disableAllMarbleClicks();
+                
                 diceRollBtn.className = '';
                 diceRollBtn.classList.add('rounded', 'btn', `btn-${PLAYER_CLASSES[msg.game.player_index]}`)
-                if (msg.game.players[msg.game.player_index].id == player.id) {
-                    diceRollBtn.disabled = false
+                
+                const isMyTurn = msg.game.players[msg.game.player_index].id == player.id;
+                const awaitingRoll = msg.game.phase === 'awaiting_roll';
+                const awaitingMove = msg.game.phase === 'awaiting_move';
+                
+                if (isMyTurn && awaitingRoll) {
+                    diceRollBtn.disabled = false;
                 } else {
-                    diceRollBtn.disabled = true
+                    diceRollBtn.disabled = true;
+                }
+                
+                if (isMyTurn && awaitingMove) {
+                    enableMarbleClicks();
                 }
 
                 msg.game.players.forEach((p, i) => {
@@ -197,12 +220,121 @@
             case 'identified':
                 playerName.value = msg.player.name
                 break
+            case 'eventLog':
+                if (msg.event) {
+                    const eventLog = document.getElementById('eventLog');
+                    if (eventLog) {
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'line';
+                        const time = new Date(msg.event.ts).toLocaleTimeString();
+                        eventDiv.innerHTML = `<span class="ts">${time}</span>${msg.event.message}`;
+                        eventLog.insertBefore(eventDiv, eventLog.firstChild);
+                        
+                        // Keep only last 20 events
+                        while (eventLog.children.length > 20) {
+                            eventLog.removeChild(eventLog.lastChild);
+                        }
+                    }
+                }
+                break
             case 'hello':
                 break;
             default:
                 break;
         }
     }
+
+    // Helper functions for game logic
+    const getHomePositions = (playerIndex) => {
+        const homes = [
+            [101, 102, 103, 104],
+            [201, 202, 203, 204],
+            [301, 302, 303, 304],
+            [401, 402, 403, 404]
+        ];
+        return homes[playerIndex] || [];
+    };
+
+    const isHomePosition = (position, playerIndex) => {
+        return getHomePositions(playerIndex).includes(position);
+    };
+
+    const canMoveFromHome = (diceValue) => {
+        return diceValue === 1 || diceValue === 6;
+    };
+
+    const getStartPosition = (playerIndex) => {
+        return [0, 14, 28, 42][playerIndex] || 0;
+    };
+
+    const getNextPosition = (currentPosition, steps, playerIndex) => {
+        if (isHomePosition(currentPosition, playerIndex)) {
+            if (canMoveFromHome(steps)) {
+                return getStartPosition(playerIndex);
+            }
+            return null;
+        }
+        return (currentPosition + steps) % 56;
+    };
+
+    const wouldBlockSelf = (marbles, movingIndex, targetPosition) => {
+        for (let i = 0; i < marbles.length; i++) {
+            if (i !== movingIndex && marbles[i] === targetPosition) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const canMoveMarble = (marbleIndex, playerIndex, diceValue) => {
+        if (!currentGameState || !currentGameState.players[playerIndex]) return false;
+        const player = currentGameState.players[playerIndex];
+        const currentPos = player.marbles[marbleIndex];
+        const newPos = getNextPosition(currentPos, diceValue, playerIndex);
+        
+        if (newPos === null) return false;
+        if (wouldBlockSelf(player.marbles, marbleIndex, newPos)) return false;
+        return true;
+    };
+
+    const enableMarbleClicks = () => {
+        if (!currentGameState || currentPlayerIndex === -1) return;
+        if (currentGameState.phase !== 'awaiting_move') return;
+        if (currentGameState.players[currentGameState.player_index].id !== player.id) return;
+        
+        const myPlayer = currentGameState.players[currentPlayerIndex];
+        const diceValue = currentGameState.last_roll;
+        
+        myPlayer.marbles.forEach((marblePos, marbleIndex) => {
+            if (canMoveMarble(marbleIndex, currentPlayerIndex, diceValue)) {
+                const coords = getMarbleCoords(marblePos, currentPlayerIndex);
+                if (coords) {
+                    const elem = $(`div.board-space[data-x='${coords.x}'][data-y='${coords.y}']`);
+                    elem.addClass('clickable-marble');
+                    elem.attr('data-marble-index', marbleIndex);
+                }
+            }
+        });
+    };
+
+    const getMarbleCoords = (position, playerIndex) => {
+        if (position < 100) {
+            return path[position];
+        }
+        
+        const homeCoords = {
+            101: {x: 8, y: 0}, 102: {x: 10, y: 0}, 103: {x: 7, y: 0}, 104: {x: 11, y: 0},
+            201: {x: 18, y: 8}, 202: {x: 18, y: 10}, 203: {x: 18, y: 7}, 204: {x: 18, y: 11},
+            301: {x: 10, y: 18}, 302: {x: 8, y: 18}, 303: {x: 11, y: 18}, 304: {x: 7, y: 18},
+            401: {x: 0, y: 10}, 402: {x: 0, y: 8}, 403: {x: 0, y: 11}, 404: {x: 0, y: 7}
+        };
+        
+        return homeCoords[position] || null;
+    };
+
+    const disableAllMarbleClicks = () => {
+        $('.clickable-marble').removeClass('clickable-marble').removeAttr('data-marble-index');
+    };
 
     function setMarbles() {
 
@@ -222,7 +354,23 @@
             }
         }
         colorCells()
-        //marchCells()
+        
+        // Add click handler for marbles using event delegation
+        playArea.addEventListener('click', (event) => {
+            const target = event.target;
+            if (target.classList.contains('clickable-marble')) {
+                const marbleIndex = parseInt(target.getAttribute('data-marble-index'));
+                if (!isNaN(marbleIndex)) {
+                    wsSafeSend({ 
+                        type: 'move_marble', 
+                        playerId: player.id, 
+                        gameCode: game.code,
+                        marbleIndex: marbleIndex
+                    });
+                    disableAllMarbleClicks();
+                }
+            }
+        });
     }
     function marchCells() {
         let idx = 0;

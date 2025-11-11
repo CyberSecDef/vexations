@@ -252,3 +252,15 @@ footer.tiny {
         animation: none
     }
 }
+
+.clickable-marble {
+    cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.8), 0 0 12px 4px rgba(108, 92, 231, 0.6) !important;
+    transform: scale(1.15);
+    transition: all 0.2s ease;
+}
+
+.clickable-marble:hover {
+    transform: scale(1.25);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.9), 0 0 16px 6px rgba(108, 92, 231, 0.8) !important;
+}
