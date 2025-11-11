@@ -290,11 +290,8 @@
         if (!currentGameState || !currentGameState.players[playerIndex]) return false;
         const player = currentGameState.players[playerIndex];
         const currentPos = player.marbles[marbleIndex];
-        const newPos = getNextPosition(currentPos, diceValue, playerIndex);
-        
-        if (newPos === null) return false;
-        if (wouldBlockSelf(player.marbles, marbleIndex, newPos)) return false;
-        return true;
+        const validDests = getValidDestinations(currentPos, diceValue, playerIndex, player.marbles, marbleIndex);
+        return validDests.length > 0;
     };
 
     const enableMarbleClicks = () => {
@@ -335,6 +332,98 @@
     const disableAllMarbleClicks = () => {
         $('.clickable-marble').removeClass('clickable-marble').removeAttr('data-marble-index');
     };
+    
+    const disableAllDestinations = () => {
+        $('.clickable-destination').removeClass('clickable-destination').removeAttr('data-destination');
+    };
+    
+    // Track selected marble
+    let selectedMarble = null;
+    
+    // Star positions matching server
+    const STAR_POSITIONS = [7, 21, 35, 49];
+    
+    const isStarPosition = (position) => {
+        return STAR_POSITIONS.includes(position);
+    };
+    
+    // Calculate valid destinations (matching server-side logic)
+    const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
+        // If in home, can only move to start position with 1 or 6
+        if (isHomePosition(currentPosition, playerIndex)) {
+            if (canMoveFromHome(steps)) {
+                const startPos = getStartPosition(playerIndex);
+                if (!wouldBlockSelf(allMarbles, movingIndex, startPos)) {
+                    return [startPos];
+                }
+            }
+            return [];
+        }
+        
+        // BFS to explore all paths step-by-step
+        const queue = [{pos: currentPosition, stepsLeft: steps, visitedStars: new Set()}];
+        const reachable = new Set();
+        const visited = new Map();
+        
+        const makeKey = (pos, stepsLeft, visitedStars) => {
+            const starList = Array.from(visitedStars).sort().join(',');
+            return `${pos},${stepsLeft},${starList}`;
+        };
+        
+        while (queue.length > 0) {
+            const {pos, stepsLeft, visitedStars} = queue.shift();
+            const key = makeKey(pos, stepsLeft, visitedStars);
+            
+            if (visited.has(key)) continue;
+            visited.set(key, true);
+            
+            if (stepsLeft === 0) {
+                if (pos !== currentPosition && !wouldBlockSelf(allMarbles, movingIndex, pos)) {
+                    reachable.add(pos);
+                }
+                continue;
+            }
+            
+            if (isStarPosition(pos)) {
+                // Option 1: Move 1 step forward
+                const nextPos = (pos + 1) % 56;
+                queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
+                
+                // Option 2: Hop to another unvisited star
+                for (const starPos of STAR_POSITIONS) {
+                    if (starPos !== pos && !visitedStars.has(starPos)) {
+                        const newVisited = new Set(visitedStars);
+                        newVisited.add(starPos);
+                        queue.push({pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited});
+                    }
+                }
+            } else {
+                // Not on a star - move forward 1 step
+                const nextPos = (pos + 1) % 56;
+                queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
+            }
+        }
+        
+        return Array.from(reachable);
+    };
+    
+    const showValidDestinations = (marbleIndex) => {
+        if (!currentGameState || currentPlayerIndex === -1) return;
+        const myPlayer = currentGameState.players[currentPlayerIndex];
+        const diceValue = currentGameState.last_roll;
+        const currentPos = myPlayer.marbles[marbleIndex];
+        
+        const validDests = getValidDestinations(currentPos, diceValue, currentPlayerIndex, myPlayer.marbles, marbleIndex);
+        
+        validDests.forEach(destPos => {
+            const coords = getMarbleCoords(destPos, currentPlayerIndex);
+            if (coords) {
+                const elem = $(`div.board-space[data-x='${coords.x}'][data-y='${coords.y}']`);
+                elem.addClass('clickable-destination');
+                elem.attr('data-destination', destPos);
+            }
+        });
+    };
 
     function setMarbles() {
 
@@ -355,20 +444,44 @@
         }
         colorCells()
         
-        // Add click handler for marbles using event delegation
+        // Add click handler for marbles and destinations using event delegation
         playArea.addEventListener('click', (event) => {
             const target = event.target;
+            
+            // Click on a marble - select it and show valid destinations
             if (target.classList.contains('clickable-marble')) {
                 const marbleIndex = parseInt(target.getAttribute('data-marble-index'));
                 if (!isNaN(marbleIndex)) {
+                    selectedMarble = marbleIndex;
+                    disableAllDestinations();
+                    showValidDestinations(marbleIndex);
+                    // Add visual feedback for selected marble
+                    $('.selected-marble').removeClass('selected-marble');
+                    target.classList.add('selected-marble');
+                }
+            }
+            // Click on a destination - make the move
+            else if (target.classList.contains('clickable-destination')) {
+                const destination = parseInt(target.getAttribute('data-destination'));
+                if (!isNaN(destination) && selectedMarble !== null) {
                     wsSafeSend({ 
                         type: 'move_marble', 
                         playerId: player.id, 
                         gameCode: game.code,
-                        marbleIndex: marbleIndex
+                        marbleIndex: selectedMarble,
+                        destination: destination
                     });
+                    selectedMarble = null;
                     disableAllMarbleClicks();
+                    disableAllDestinations();
+                    $('.selected-marble').removeClass('selected-marble');
                 }
+            }
+            // Click elsewhere - deselect
+            else if (selectedMarble !== null) {
+                selectedMarble = null;
+                disableAllDestinations();
+                $('.selected-marble').removeClass('selected-marble');
             }
         });
     }
