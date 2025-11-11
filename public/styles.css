@@ -1,0 +1,254 @@
+:root {
+    --bg: #f9fafc;
+    --card: #ffffff;
+    --ink: #1d2330;
+    --muted: #5e6b84;
+    --brand: #6c5ce7;
+    --accent: #00c2a8;
+    --yellow: #ffd43b;
+    --green: #2ecc71;
+    --grey: #6b7280;
+    --line: #e6e8ef;
+}
+
+* {
+    box-sizing: border-box
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+    background-image: linear-gradient(to bottom right, #faf5ff, #fdf2f8);
+}
+
+.sticky {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .5rem .75rem;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+}
+
+.brand {
+    font-weight: 800;
+    letter-spacing: .2px
+}
+
+.status {
+    font-size: .9rem;
+    color: var(--muted)
+}
+
+.sep {
+    margin: 0 .35rem;
+    color: var(--line)
+}
+
+.dot {
+    display: inline-block;
+    width: .65rem;
+    height: .65rem;
+    border-radius: 50%;
+    margin-right: .35rem;
+    background: var(--grey)
+}
+
+.dot.online {
+    background: var(--accent)
+}
+
+.dot.offline {
+    background: #ff5c5c
+}
+
+/* Layout */
+#layout {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: .9rem;
+    max-width: 1200px;
+    margin: 1rem auto;
+    padding: 0 1rem;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, .03);
+}
+
+.row {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    margin: .25rem 0
+}
+
+.row label {
+    font-weight: 600
+}
+
+input {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: .45rem .65rem;
+    font-size: 1rem;
+    flex: 1;
+}
+
+button {
+    border: 0;
+    border-radius: 10px;
+    padding: .45rem .8rem;
+    cursor: pointer;
+    background: var(--brand);
+    color: #fff;
+}
+
+button.pill {
+    background: var(--muted)
+}
+
+button.primary {
+    background: linear-gradient(90deg, var(--brand), #8b5cf6)
+}
+
+.log {
+    max-height: 320px;
+    overflow: auto;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: .5rem;
+    background: #fcfcff;
+}
+
+.log .line {
+    font-size: .9rem;
+    color: #3c435a;
+    border-bottom: 1px dotted var(--line);
+    padding: .2rem 0
+}
+
+.log .ts {
+    color: var(--muted);
+    font-size: .8rem;
+    margin-right: .4rem
+}
+
+
+/* Footer */
+footer.tiny {
+    max-width: 1200px;
+    margin: 1rem auto;
+    padding: 0 1rem;
+    color: var(--muted);
+    font-size: .85rem;
+}
+
+.playarea-container {
+    width: 460px;
+    margin: auto;
+}
+
+.playarea {
+    display: grid;
+    grid-template-columns: repeat(19, 1fr);
+    /* Creates 19 equal-width columns */
+    gap: 0;
+    /* Optional: Adds a gap between grid items */
+    border: 2px solid #b3b9cc;
+    border-radius: 12px;
+    background: #eef;
+}
+
+.board-space {
+    margin: 0px;
+    padding: 0px;
+    height: 24px;
+    width: 24px;
+    border-radius: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width:860px) {
+    #layout {
+        grid-template-columns: 1fr
+    }
+
+    #sideCol {
+        order: 2
+    }
+
+    #playArea {
+        order: 1
+    }
+}
+
+.wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: .75rem;
+    font: 600 20px/1.2 system-ui;
+    
+}
+
+.die {
+    width: 64px;
+    height: 64px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    background: #fff;
+    color:#000;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .1);
+    border: 2px solid #e7ecff;
+    font-size: 40px;
+    user-select: none;
+}
+
+.die_status {
+    color: #6b7280;
+    min-width: 8ch
+}
+
+.shake {
+    animation: shake .25s linear infinite;
+}
+
+@keyframes shake {
+    0% {
+        transform: translate(0, 0) rotate(0deg)
+    }
+
+    25% {
+        transform: translate(1px, -1px) rotate(1deg)
+    }
+
+    50% {
+        transform: translate(-1px, 1px) rotate(-1deg)
+    }
+
+    75% {
+        transform: translate(1px, 1px) rotate(0deg)
+    }
+
+    100% {
+        transform: translate(0, 0) rotate(0deg)
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shake {
+        animation: none
+    }
+}

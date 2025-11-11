@@ -1,0 +1,20 @@
+{
+  "name": "vexations",
+  "version": "1.0.0",
+  "description": "Multiplayer round-based aggravation game (Express + WebSocket) with mobile-first UI.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cookie": "^0.6.0",
+    "express": "^4.19.2",
+    "nodemon": "^3.1.10",
+    "uuid": "^9.0.1",
+    "ws": "^8.18.0"
+  }
+}
