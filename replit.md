@@ -40,8 +40,38 @@ The server runs on:
 
 Cache control headers are set to prevent caching issues in iframe environments.
 
-## Recent Changes (GitHub Import Setup)
+## Game Mechanics
 
+### Basic Movement
+- Roll the dice on your turn
+- To enter play from home: roll a 1 or 6
+- Move marbles around the 56-space main path
+- Landing on an opponent sends them back home
+- Rolling a 6 gives you another turn
+
+### Star Space Teleportation
+Special star spaces at positions 7, 21, 35, and 49 allow strategic movement:
+- **Activation**: Stars only activate when you START your turn on them (not when passing through)
+- **Hopping**: From a star, you can hop to any other star (costs 1 die step) OR move normally
+- **Full Roll Required**: You must always use your complete dice roll
+- **Example**: On star position 49, roll 3 → can hop to star 21 (1 step) then move 2 more (ending at 23)
+
+### Movement UI
+- **Click a marble**: Shows all valid destinations highlighted in teal with dots
+- **Click a destination**: Moves your marble there
+- **Click elsewhere**: Deselects your marble
+- **10-second timer**: Marble auto-deselects after 10 seconds if no move is made
+
+## Recent Changes
+
+**December 2025 - Star Space & UI Improvements**
+- Implemented star space teleportation mechanic (positions 7, 21, 35, 49)
+- Changed movement system from auto-move to two-click pattern (select marble → select destination)
+- Added visual indicators: clickable marbles (purple glow), selected marble (gold pulse), valid destinations (teal + dots)
+- Added 10-second auto-deselect timer for better UX
+- Implemented BFS pathfinding for complex movement validation including star hopping
+
+**GitHub Import Setup**
 - Changed server port from 8010 to 5000 for Replit compatibility
 - Added `process.env.PORT` support for deployment flexibility
 - Added cache-control middleware to prevent iframe caching issues
