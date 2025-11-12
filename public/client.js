@@ -337,8 +337,26 @@
         $('.clickable-destination').removeClass('clickable-destination').removeAttr('data-destination');
     };
     
-    // Track selected marble
+    // Track selected marble and auto-deselect timer
     let selectedMarble = null;
+    let selectionTimer = null;
+    
+    const clearSelectionTimer = () => {
+        if (selectionTimer) {
+            clearTimeout(selectionTimer);
+            selectionTimer = null;
+        }
+    };
+    
+    const startSelectionTimer = () => {
+        clearSelectionTimer();
+        selectionTimer = setTimeout(() => {
+            selectedMarble = null;
+            disableAllDestinations();
+            $('.selected-marble').removeClass('selected-marble');
+            selectionTimer = null;
+        }, 10000); // 10 seconds
+    };
     
     // Star positions matching server
     const STAR_POSITIONS = [7, 21, 35, 49];
@@ -348,6 +366,7 @@
     };
     
     // Calculate valid destinations (matching server-side logic)
+    // Star hopping only works if you START on a star (not if you pass through one)
     const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
         // If in home, can only move to start position with 1 or 6
         if (isHomePosition(currentPosition, playerIndex)) {
@@ -384,12 +403,14 @@
                 continue;
             }
             
-            if (isStarPosition(pos)) {
-                // Option 1: Move 1 step forward
-                const nextPos = (pos + 1) % 56;
-                queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
-                
-                // Option 2: Hop to another unvisited star
+            // Always allow moving forward 1 step
+            const nextPos = (pos + 1) % 56;
+            queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
+            
+            // Star hopping only works if we're still at the starting position AND it's a star
+            // You can't hop to stars you reach mid-move
+            if (pos === currentPosition && isStarPosition(pos)) {
+                // Can also hop to another unvisited star (costs 1 step)
                 for (const starPos of STAR_POSITIONS) {
                     if (starPos !== pos && !visitedStars.has(starPos)) {
                         const newVisited = new Set(visitedStars);
@@ -397,10 +418,6 @@
                         queue.push({pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited});
                     }
                 }
-            } else {
-                // Not on a star - move forward 1 step
-                const nextPos = (pos + 1) % 56;
-                queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
             }
         }
         
@@ -458,12 +475,15 @@
                     // Add visual feedback for selected marble
                     $('.selected-marble').removeClass('selected-marble');
                     target.classList.add('selected-marble');
+                    // Start 10-second timer for auto-deselect
+                    startSelectionTimer();
                 }
             }
             // Click on a destination - make the move
             else if (target.classList.contains('clickable-destination')) {
                 const destination = parseInt(target.getAttribute('data-destination'));
                 if (!isNaN(destination) && selectedMarble !== null) {
+                    clearSelectionTimer();
                     wsSafeSend({ 
                         type: 'move_marble', 
                         playerId: player.id, 
@@ -479,6 +499,7 @@
             }
             // Click elsewhere - deselect
             else if (selectedMarble !== null) {
+                clearSelectionTimer();
                 selectedMarble = null;
                 disableAllDestinations();
                 $('.selected-marble').removeClass('selected-marble');
