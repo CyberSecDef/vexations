@@ -337,26 +337,8 @@
         $('.clickable-destination').removeClass('clickable-destination').removeAttr('data-destination');
     };
     
-    // Track selected marble and auto-deselect timer
+    // Track selected marble
     let selectedMarble = null;
-    let selectionTimer = null;
-    
-    const clearSelectionTimer = () => {
-        if (selectionTimer) {
-            clearTimeout(selectionTimer);
-            selectionTimer = null;
-        }
-    };
-    
-    const startSelectionTimer = () => {
-        clearSelectionTimer();
-        selectionTimer = setTimeout(() => {
-            selectedMarble = null;
-            disableAllDestinations();
-            $('.selected-marble').removeClass('selected-marble');
-            selectionTimer = null;
-        }, 10000); // 10 seconds
-    };
     
     // Star positions matching server
     const STAR_POSITIONS = [7, 21, 35, 49];
@@ -469,21 +451,19 @@
             if (target.classList.contains('clickable-marble')) {
                 const marbleIndex = parseInt(target.getAttribute('data-marble-index'));
                 if (!isNaN(marbleIndex)) {
-                    selectedMarble = marbleIndex;
+                    // Clear previous destinations and selection
                     disableAllDestinations();
-                    showValidDestinations(marbleIndex);
-                    // Add visual feedback for selected marble
                     $('.selected-marble').removeClass('selected-marble');
+                    // Select new marble and show its destinations
+                    selectedMarble = marbleIndex;
+                    showValidDestinations(marbleIndex);
                     target.classList.add('selected-marble');
-                    // Start 10-second timer for auto-deselect
-                    startSelectionTimer();
                 }
             }
             // Click on a destination - make the move
             else if (target.classList.contains('clickable-destination')) {
                 const destination = parseInt(target.getAttribute('data-destination'));
                 if (!isNaN(destination) && selectedMarble !== null) {
-                    clearSelectionTimer();
                     wsSafeSend({ 
                         type: 'move_marble', 
                         playerId: player.id, 
@@ -499,7 +479,6 @@
             }
             // Click elsewhere - deselect
             else if (selectedMarble !== null) {
-                clearSelectionTimer();
                 selectedMarble = null;
                 disableAllDestinations();
                 $('.selected-marble').removeClass('selected-marble');

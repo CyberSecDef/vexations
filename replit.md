@@ -57,18 +57,19 @@ Special star spaces at positions 7, 21, 35, and 49 allow strategic movement:
 - **Example**: On star position 49, roll 3 → can hop to star 21 (1 step) then move 2 more (ending at 23)
 
 ### Movement UI
-- **Click a marble**: Shows all valid destinations highlighted in teal with dots
+- **Click a marble**: Shows all valid destinations highlighted in teal with dots (stays visible)
 - **Click a destination**: Moves your marble there
-- **Click elsewhere**: Deselects your marble
-- **10-second timer**: Marble auto-deselects after 10 seconds if no move is made
+- **Click another marble**: Clears previous destinations and shows new ones
+- **Click elsewhere**: Deselects your marble and clears destination highlights
 
 ## Recent Changes
 
 **December 2025 - Star Space & UI Improvements**
 - Implemented star space teleportation mechanic (positions 7, 21, 35, 49)
+- Stars only activate when you START your turn on them (not when passing through)
 - Changed movement system from auto-move to two-click pattern (select marble → select destination)
 - Added visual indicators: clickable marbles (purple glow), selected marble (gold pulse), valid destinations (teal + dots)
-- Added 10-second auto-deselect timer for better UX
+- Destination highlights stay visible until you click another marble, make a move, or deselect
 - Implemented BFS pathfinding for complex movement validation including star hopping
 
 **GitHub Import Setup**
