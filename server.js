@@ -4,162 +4,15 @@ const http = require("http");
 const express = require("express");
 const WebSocket = require("ws");
 
-const HOST = "0.0.0.0";
-const PORT = Number(process.env.PORT) || 5000;
-const PING_INTERVAL_MS = 20_000;
+// Import configuration and modules
+const { HOST, PORT, PING_INTERVAL_MS } = require("./src/config/constants");
+const { handleMessage } = require("./src/websocket/handlers");
+const { logEvent } = require("./src/game/state");
 
-// Star and center space positions on the path
-const STAR_POSITIONS = [7, 21, 35, 49];
-const CENTER_POSITION = 999;
-
-const token8 = () => {
-  const t = Date.now(); // current time in ms
-  const r = Math.floor(Math.random() * 0xffffff); // random 24-bit salt
-  const mix = (t ^ r).toString(36).toUpperCase(); // xor + base36
-  return (mix + Math.random().toString(36).substr(2, 8))
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "") // strip weirds
-    .slice(0, 8); // keep 8 chars
-};
-
-const rollDice = () => {
-  return Math.floor(Math.random() * 6) + 1;
-};
-
-// Game helper functions
-const getHomePositions = (playerIndex) => {
-  const homes = [
-    [101, 102, 103, 104],
-    [201, 202, 203, 204],
-    [301, 302, 303, 304],
-    [401, 402, 403, 404]
-  ];
-  return homes[playerIndex] || [];
-};
-
-const getStartPosition = (playerIndex) => {
-  return [0, 14, 28, 42][playerIndex] || 0;
-};
-
-const isHomePosition = (position, playerIndex) => {
-  return getHomePositions(playerIndex).includes(position);
-};
-
-const canMoveFromHome = (diceValue) => {
-  return diceValue === 1 || diceValue === 6;
-};
-
-const hasValidMoves = (game, playerIndex, diceValue) => {
-  const player = game.players[playerIndex];
-  if (!player) return false;
-  
-  for (let i = 0; i < player.marbles.length; i++) {
-    const pos = player.marbles[i];
-    const validDests = getValidDestinations(pos, diceValue, playerIndex, player.marbles, i);
-    if (validDests.length > 0) {
-      return true;
-    }
-  }
-  return false;
-};
-
-const wouldBlockSelf = (marbles, movingIndex, targetPosition) => {
-  for (let i = 0; i < marbles.length; i++) {
-    if (i !== movingIndex && marbles[i] === targetPosition) {
-      return true;
-    }
-  }
-  return false;
-};
-
-const advanceTurn = (game) => {
-  game.player_index = (game.player_index + 1) % game.players.length;
-  game.phase = 'awaiting_roll';
-  game.last_roll = null;
-};
-
-
-
-const isStarPosition = (position) => {
-  return STAR_POSITIONS.includes(position);
-};
-
-// Calculate all valid destinations from a position with given steps
-// Returns array of possible destination positions (only positions using EXACT steps)
-// Star hopping only works if you START on a star (not if you pass through one)
-// center entry must be exact.  center exit is only on dice roll of 1
-const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
-  // If currently in center: only exit on exact roll 1 to any star position
-  if (currentPosition === CENTER_POSITION) {
-    if (steps === 1) {
-      // return all star positions you can move to (not blocked by self)
-      return STAR_POSITIONS.filter(starPos => !wouldBlockSelf(allMarbles, movingIndex, starPos));
-    }
-    return [];
-  }
-
-  // If in home, can only move to start position with 1 or 6
-  if (isHomePosition(currentPosition, playerIndex)) {
-    if (canMoveFromHome(steps)) {
-      const startPos = getStartPosition(playerIndex);
-      if (!wouldBlockSelf(allMarbles, movingIndex, startPos)) {
-        return [startPos];
-      }
-    }
-    return [];
-  }
-
-  // BFS to explore all paths step-by-step (exact steps)
-  const queue = [{pos: currentPosition, stepsLeft: steps, visitedStars: new Set()}];
-  const reachable = new Set();
-  const visited = new Set();
-
-  const makeKey = (pos, stepsLeft, visitedStars) => {
-    const starList = Array.from(visitedStars).sort().join(',');
-    return `${pos},${stepsLeft},${starList}`;
-  };
-
-  while (queue.length > 0) {
-    const {pos, stepsLeft, visitedStars} = queue.shift();
-    const key = makeKey(pos, stepsLeft, visitedStars);
-    if (visited.has(key)) continue;
-    visited.add(key);
-
-    // If we've used all steps, this is a valid destination
-    if (stepsLeft === 0) {
-      if (pos !== currentPosition && !wouldBlockSelf(allMarbles, movingIndex, pos)) {
-        reachable.add(pos);
-      }
-      continue;
-    }
-
-    // Normal forward 1 step along path
-    const nextPos = (pos + 1) % 56;
-    queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
-
-    // If nextPos is a STAR, you can optionally move INTO the CENTER (distance 1 from that star)
-    // This models the center being adjacent to the star squares.
-    if (isStarPosition(nextPos)) {
-      queue.push({pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
-    }
-
-    // Star teleporting: only allowed if we START on a star (not if we pass through)
-    if (pos === currentPosition && isStarPosition(pos)) {
-      for (const starPos of STAR_POSITIONS) {
-        if (starPos !== pos && !visitedStars.has(starPos)) {
-          const newVisited = new Set(visitedStars);
-          newVisited.add(starPos);
-          queue.push({pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited});
-        }
-      }
-    }
-  }
-
-  return Array.from(reachable);
-};
-
+// Express app setup
 const app = express();
 
+// Cache control middleware
 app.use((req, res, next) => {
   res.setHeader(
     "Cache-Control",
@@ -183,7 +36,10 @@ const server = http.createServer(app);
 
 let wss = null;
 
-// send to everyone
+/**
+ * Broadcast message to all connected clients
+ * @param {Object} obj - Object to broadcast
+ */
 function broadcast(obj) {
   // No-op if wss isn't initialized yet (e.g., during boot logging)
   if (!wss || wss.clients.size === 0) return;
@@ -193,6 +49,10 @@ function broadcast(obj) {
   }
 }
 
+/**
+ * Create full snapshot of server state
+ * @returns {Object} Snapshot object
+ */
 function fullSnapshot() {
   // Provide the minimum to recreate UI
   return {
@@ -200,6 +60,11 @@ function fullSnapshot() {
   };
 }
 
+/**
+ * Send message to specific WebSocket client
+ * @param {WebSocket} ws - WebSocket client
+ * @param {Object} obj - Object to send
+ */
 function send(ws, obj) {
   try {
     ws.send(JSON.stringify(obj));
@@ -208,20 +73,8 @@ function send(ws, obj) {
   }
 }
 
-function sanitizeName(name) {
-  if (!name || typeof name !== "string") return "Player";
-  return name.trim().slice(0, 16) || "Player";
-}
 
-function logEvent(game, message) {
-  const entry = { ts: Date.now(), message };
-  if (!game.event_log) game.event_log = [];
-  game.event_log.push(entry);
-  if (game.event_log.length > 100) game.event_log.shift();
-  broadcast({ type: "eventLog", event: entry });
-}
-
-// WS connection handling
+// WebSocket connection handling
 wss = new WebSocket.Server({ server });
 
 wss.on("connection", (ws) => {
@@ -241,168 +94,21 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    switch (msg.type) {
-      case "roll_dice":
-        if (!msg.playerId || !msg.gameCode) return;
-        if (!state.players[msg.playerId]) return;
-        if (!state.games[msg.gameCode]) return;
-        const game = state.games[msg.gameCode];
-        if (
-          game.players.filter((e, i) => {
-            return e.id == msg.playerId;
-          }).length <= 0
-        )
-          return;
-        if (game.players[game.player_index].id != msg.playerId) return;
-        if (game.phase !== 'awaiting_roll') return;
-        
-        const diceValue = rollDice();
-        game.last_roll = diceValue;
-        game.phase = 'awaiting_move';
-        
-        if (!hasValidMoves(game, game.player_index, diceValue)) {
-          logEvent(game, `No valid moves available. Turn skipped.`);
-          advanceTurn(game);
-        }
-        
-        broadcast({ type: "dice_roll", dice: diceValue });
-        broadcast({ type: "game_info", game: game, s: state });
+    // Broadcast wrapper to also log events
+    const broadcastWithLog = (obj) => {
+      if (obj.type === "eventLog") {
+        broadcast(obj);
+      } else {
+        broadcast(obj);
+      }
+    };
 
-        break;
-      case "move_marble":
-        if (!msg.playerId || !msg.gameCode || msg.marbleIndex === undefined || msg.destination === undefined) return;
-        if (!state.players[msg.playerId]) return;
-        if (!state.games[msg.gameCode]) return;
-        
-        const moveGame = state.games[msg.gameCode];
-        if (moveGame.players.filter(e => e.id == msg.playerId).length <= 0) return;
-        if (moveGame.players[moveGame.player_index].id != msg.playerId) return;
-        if (moveGame.phase !== 'awaiting_move') return;
-        if (!moveGame.last_roll) return;
-        
-        const currentPlayer = moveGame.players[moveGame.player_index];
-        const marbleIndex = msg.marbleIndex;
-        const destination = msg.destination;
-        
-        if (marbleIndex < 0 || marbleIndex >= currentPlayer.marbles.length) return;
-        
-        const currentPos = currentPlayer.marbles[marbleIndex];
-        
-        // Get all valid destinations and check if the requested destination is valid
-        const validDestinations = getValidDestinations(
-          currentPos, 
-          moveGame.last_roll, 
-          moveGame.player_index,
-          currentPlayer.marbles,
-          marbleIndex
-        );
-        
-        if (!validDestinations.includes(destination)) return;
-        
-        currentPlayer.marbles[marbleIndex] = destination;
-        
-        logEvent(moveGame, `${state.players[msg.playerId].name} moved marble to position ${destination}`);
-        
-        // Check for collisions with other players
-        for (let i = 0; i < moveGame.players.length; i++) {
-          if (i !== moveGame.player_index) {
-            const otherPlayer = moveGame.players[i];
-            for (let j = 0; j < otherPlayer.marbles.length; j++) {
-              if (otherPlayer.marbles[j] === destination && !isHomePosition(destination, i)) {
-                const homePos = getHomePositions(i)[j];
-                otherPlayer.marbles[j] = homePos;
-                const otherPlayerName = state.players[otherPlayer.id]?.name || 'Player';
-                logEvent(moveGame, `${otherPlayerName}'s marble was sent home!`);
-              }
-            }
-          }
-        }
-        
-        // Handle turn advancement
-        if (moveGame.last_roll === 6) {
-          logEvent(moveGame, `${state.players[msg.playerId].name} rolled a 6 and gets another turn!`);
-          moveGame.phase = 'awaiting_roll';
-          moveGame.last_roll = null;
-        } else {
-          advanceTurn(moveGame);
-        }
-        
-        broadcast({ type: "game_info", game: moveGame, s: state });
-        break;
-      case "heartbeat":
-        if (!msg.playerId || !msg.gameCode) return;
-        if (!state.players[msg.playerId]) return;
-        if (!state.games[msg.gameCode]) return;
-        if (!state.games[msg.gameCode].players) return;
-        if (state.games[msg.gameCode].players.length == 0) return;
-
-        send(ws, {
-          type: "game_info",
-          game: state.games[msg.gameCode],
-          s: state,
-        });
-        break;
-      case "join_game":
-        if (!msg.playerId || !msg.gameCode) return;
-        if (!state.players[msg.playerId]) return;
-        if (!state.games[msg.gameCode]) return;
-        if (!state.games[msg.gameCode].players) {
-          state.games[msg.gameCode].players = [];
-        }
-        if (state.games[msg.gameCode].players.length >= 4) return;
-
-        const newPlayerIndex = state.games[msg.gameCode].players.length;
-        let p = {
-          id: msg.playerId,
-          marbles: getHomePositions(newPlayerIndex),
-        };
-        state.games[msg.gameCode].players.push(p);
-
-        send(ws, {
-          type: "game_info",
-          game: state.games[msg.gameCode],
-          s: state,
-        });
-        break;
-      case "new_game":
-        let gameCode = token8();
-        let g = {};
-        g.code = gameCode;
-        g.players = [];
-        g.player_index = 0;
-        g.phase = 'awaiting_roll';
-        g.last_roll = null;
-        g.event_log = [];
-        state.games[gameCode] = g;
-
-        send(ws, { type: "game_info", game: state.games[gameCode], s: state });
-        break;
-      case "identify":
-        if (!msg.playerId || !msg.playerName) {
-          return;
-        }
-        if (!state.players[msg.playerId]) {
-          let p = {};
-          p.id = msg.playerId;
-          p.name = sanitizeName(msg.playerName);
-          state.players[msg.playerId] = p;
-        }
-        state.players[msg.playerId].connected = true;
-        state.players[msg.playerId].lastSeen = Date.now();
-
-        send(ws, {
-          type: "identified",
-          player: state.players[msg.playerId],
-          s: state,
-        });
-        break;
-    }
-
-    return;
+    // Route message to handler
+    handleMessage(msg, state, ws, send, broadcastWithLog);
   });
 
   ws.on("close", () => {
-    
+    // Connection closed - could track disconnections here
   });
 });
 
@@ -412,20 +118,26 @@ const interval = setInterval(() => {
     if (!ws.isAlive) {
       try {
         ws.terminate();
-      } catch (e) {}
+      } catch (e) {
+        // Ignore termination errors
+      }
       continue;
     }
     ws.isAlive = false;
     try {
       ws.ping();
-    } catch (e) {}
+    } catch (e) {
+      // Ignore ping errors
+    }
   }
 }, PING_INTERVAL_MS);
 
+// Start server
 server.listen(PORT, () => {
   console.log(`✅ Vex game server listening on http://${HOST}:${PORT}`);
 });
 
+// Graceful shutdown
 process.on("SIGINT", () => {
   clearInterval(interval);
   process.exit(0);
