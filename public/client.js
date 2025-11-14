@@ -3,18 +3,24 @@
     const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
     const FACES = ["\u2680", "\u2681", "\u2682", "\u2683", "\u2684", "\u2685"];
     const PLAYER_CLASSES = ["primary", "warning", "success", "danger"]
+    const CENTER_POSITION = 999;
+
     // DOM
     const nameInput = document.getElementById('nameInput');
     const nameCheck = document.getElementById('nameCheck');
     const charsRemainingNameSpan = document.getElementById('charsRemainingName');
     const gameCodeInput = document.getElementById('gameCode');
-    const gameCodeDiv = document.getElementById('gameCodeDiv')
     const charsRemainingCodeSpan = document.getElementById('charsRemainingCode');
-    const playAreaDiv = document.getElementById('playArea')
+    const playAreaDiv = document.getElementById('playAreaDiv')
     const playBtn = document.getElementById('playBtn')
     const splashDiv = document.getElementById('splash')
-    const playAreaContainer = document.getElementById('playareaContainer')
+    const playAreaContainer = document.getElementById('playAreaContainer')
     const diceRollBtn = document.getElementById('diceRollBtn')
+
+    const connDot = document.getElementById('connDot')
+    const connText = document.getElementById('connText')
+
+
 
     const game = {
         code: "",
@@ -52,10 +58,9 @@
     let ws;
     let wsConnected = false;
     let disconnectAt = null;
-    let snapshot = null; // last server snapshot
     let reconnectTimer;
-    let heartbeatTimer;
     let autoRefreshTimer;
+    let heartbeatTimer;
     let currentGameState = null;
     let currentPlayerIndex = -1;
 
@@ -116,7 +121,7 @@
         //join the game
         setTimeout(() => {
             wsSafeSend({ type: 'join_game', playerId: player.id, gameCode: gameCodeInput.value })
-            playareaContainer.classList.remove('d-none')
+            playAreaContainer.classList.remove('d-none')
             splashDiv.classList.add('d-none')
         }, 1000)
     })
@@ -130,7 +135,7 @@
             case 'game_info':
                 game.setCode(msg.game.code)
                 currentGameState = msg.game;
-                
+
                 // Find current player's index
                 currentPlayerIndex = -1;
                 msg.game.players.forEach((p, i) => {
@@ -138,17 +143,17 @@
                         currentPlayerIndex = i;
                     }
                 });
-                
+
                 colorCells()
                 disableAllMarbleClicks();
-                
+
                 diceRollBtn.className = '';
                 diceRollBtn.classList.add('rounded', 'btn', `btn-${PLAYER_CLASSES[msg.game.player_index]}`)
-                
-                const isMyTurn = msg.game.players[msg.game.player_index].id == player.id;
+
+                const isMyTurn = msg.game.players[msg.game.player_index] && msg.game.players[msg.game.player_index].id ? msg.game.players[msg.game.player_index].id == player.id : false;
                 const awaitingRoll = msg.game.phase === 'awaiting_roll';
                 const awaitingMove = msg.game.phase === 'awaiting_move';
-                
+
                 if (isMyTurn && awaitingRoll) {
                     diceRollBtn.disabled = false;
                 } else {
@@ -156,69 +161,75 @@
                 }
 
                 msg.game.players.forEach((p, i) => {
+                    let homeSpaceClass = `board-space border-2 border border-${PLAYER_CLASSES[i]} bg-${PLAYER_CLASSES[i]}`
                     p.marbles.forEach((m, j) => {
-                        if (m == 100) {
-                            $(`div.board-space[data-x='7'][data-y='0']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
-                        }
                         if (m == 101) {
-                            $(`div.board-space[data-x='8'][data-y='0']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='7'][data-y='0']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 102) {
-                            $(`div.board-space[data-x='10'][data-y='0']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='8'][data-y='0']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 103) {
-                            $(`div.board-space[data-x='11'][data-y='0']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='10'][data-y='0']`).removeClass().addClass(homeSpaceClass)
                         }
-                        if (m == 200) {
-                            $(`div.board-space[data-x='18'][data-y='7']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                        if (m == 104) {
+                            $(`div.board-space[data-x='11'][data-y='0']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 201) {
-                            $(`div.board-space[data-x='18'][data-y='8']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='18'][data-y='7']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 202) {
-                            $(`div.board-space[data-x='18'][data-y='10']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='18'][data-y='8']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 203) {
-                            $(`div.board-space[data-x='18'][data-y='11']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='18'][data-y='10']`).removeClass().addClass(homeSpaceClass)
                         }
-                        if (m == 300) {
-                            $(`div.board-space[data-x='11'][data-y='18']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                        if (m == 204) {
+                            $(`div.board-space[data-x='18'][data-y='11']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 301) {
-                            $(`div.board-space[data-x='10'][data-y='18']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='11'][data-y='18']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 302) {
-                            $(`div.board-space[data-x='8'][data-y='18']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='10'][data-y='18']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 303) {
-                            $(`div.board-space[data-x='7'][data-y='18']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='8'][data-y='18']`).removeClass().addClass(homeSpaceClass)
                         }
-                        if (m == 400) {
-                            $(`div.board-space[data-x='0'][data-y='11']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                        if (m == 304) {
+                            $(`div.board-space[data-x='7'][data-y='18']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 401) {
-                            $(`div.board-space[data-x='0'][data-y='10']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='0'][data-y='11']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 402) {
-                            $(`div.board-space[data-x='0'][data-y='8']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='0'][data-y='10']`).removeClass().addClass(homeSpaceClass)
                         }
                         if (m == 403) {
-                            $(`div.board-space[data-x='0'][data-y='7']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                            $(`div.board-space[data-x='0'][data-y='8']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 404) {
+                            $(`div.board-space[data-x='0'][data-y='7']`).removeClass().addClass(homeSpaceClass)
                         }
 
                         if (m < 100) {
                             $(`div.board-space[data-x='${path[m].x}'][data-y='${path[m].y}']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
                         }
+
+                        if (m === CENTER_POSITION) {
+                            const c = getMarbleCoords(m, i);
+                            if (c) $(`div.board-space[data-x='${c.x}'][data-y='${c.y}']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`);
+                        }
                     })
                 })
-                
+
                 if (isMyTurn && awaitingMove) {
                     enableMarbleClicks();
                 }
 
                 break;
             case 'identified':
-                playerName.value = msg.player.name
+                player.setName(msg.player.name)
                 break
             case 'eventLog':
                 if (msg.event) {
@@ -229,7 +240,7 @@
                         const time = new Date(msg.event.ts).toLocaleTimeString();
                         eventDiv.innerHTML = `<span class="ts">${time}</span>${msg.event.message}`;
                         eventLog.insertBefore(eventDiv, eventLog.firstChild);
-                        
+
                         // Keep only last 20 events
                         while (eventLog.children.length > 20) {
                             eventLog.removeChild(eventLog.lastChild);
@@ -267,16 +278,6 @@
         return [0, 14, 28, 42][playerIndex] || 0;
     };
 
-    const getNextPosition = (currentPosition, steps, playerIndex) => {
-        if (isHomePosition(currentPosition, playerIndex)) {
-            if (canMoveFromHome(steps)) {
-                return getStartPosition(playerIndex);
-            }
-            return null;
-        }
-        return (currentPosition + steps) % 56;
-    };
-
     const wouldBlockSelf = (marbles, movingIndex, targetPosition) => {
         for (let i = 0; i < marbles.length; i++) {
             if (i !== movingIndex && marbles[i] === targetPosition) {
@@ -298,10 +299,10 @@
         if (!currentGameState || currentPlayerIndex === -1) return;
         if (currentGameState.phase !== 'awaiting_move') return;
         if (currentGameState.players[currentGameState.player_index].id !== player.id) return;
-        
+
         const myPlayer = currentGameState.players[currentPlayerIndex];
         const diceValue = currentGameState.last_roll;
-        
+
         myPlayer.marbles.forEach((marblePos, marbleIndex) => {
             if (canMoveMarble(marbleIndex, currentPlayerIndex, diceValue)) {
                 const coords = getMarbleCoords(marblePos, currentPlayerIndex);
@@ -318,38 +319,49 @@
         if (position < 100) {
             return path[position];
         }
-        
+
         const homeCoords = {
-            101: {x: 8, y: 0}, 102: {x: 10, y: 0}, 103: {x: 7, y: 0}, 104: {x: 11, y: 0},
-            201: {x: 18, y: 8}, 202: {x: 18, y: 10}, 203: {x: 18, y: 7}, 204: {x: 18, y: 11},
-            301: {x: 10, y: 18}, 302: {x: 8, y: 18}, 303: {x: 11, y: 18}, 304: {x: 7, y: 18},
-            401: {x: 0, y: 10}, 402: {x: 0, y: 8}, 403: {x: 0, y: 11}, 404: {x: 0, y: 7}
+            101: { x: 7, y: 0 }, 102: { x: 8, y: 0 }, 103: { x: 10, y: 0 }, 104: { x: 11, y: 0 },
+            201: { x: 18, y: 7 }, 202: { x: 18, y: 8 }, 203: { x: 18, y: 10 }, 204: { x: 18, y: 11 },
+            301: { x: 11, y: 18 }, 302: { x: 10, y: 18 }, 303: { x: 8, y: 18 }, 304: { x: 7, y: 18 },
+            401: { x: 0, y: 7 }, 402: { x: 0, y: 8 }, 403: { x: 0, y: 10 }, 404: { x: 0, y: 11 }
         };
-        
+        if (position === CENTER_POSITION) return { x: 9, y: 9 };
         return homeCoords[position] || null;
     };
 
     const disableAllMarbleClicks = () => {
         $('.clickable-marble').removeClass('clickable-marble').removeAttr('data-marble-index');
     };
-    
+
     const disableAllDestinations = () => {
         $('.clickable-destination').removeClass('clickable-destination').removeAttr('data-destination');
     };
-    
+
     // Track selected marble
     let selectedMarble = null;
-    
+
     // Star positions matching server
     const STAR_POSITIONS = [7, 21, 35, 49];
-    
+
     const isStarPosition = (position) => {
         return STAR_POSITIONS.includes(position);
     };
-    
-    // Calculate valid destinations (matching server-side logic)
+
+    // Calculate all valid destinations from a position with given steps
+    // Returns array of possible destination positions (only positions using EXACT steps)
     // Star hopping only works if you START on a star (not if you pass through one)
+    // center entry must be exact.  center exit is only on dice roll of 1
     const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
+        // If currently in center: only exit on exact roll 1 to any star position
+        if (currentPosition === CENTER_POSITION) {
+            if (steps === 1) {
+                // return all star positions you can move to (not blocked by self)
+                return STAR_POSITIONS.filter(starPos => !wouldBlockSelf(allMarbles, movingIndex, starPos));
+            }
+            return [];
+        }
+
         // If in home, can only move to start position with 1 or 6
         if (isHomePosition(currentPosition, playerIndex)) {
             if (canMoveFromHome(steps)) {
@@ -360,60 +372,64 @@
             }
             return [];
         }
-        
-        // BFS to explore all paths step-by-step
-        const queue = [{pos: currentPosition, stepsLeft: steps, visitedStars: new Set()}];
+
+        // BFS to explore all paths step-by-step (exact steps)
+        const queue = [{ pos: currentPosition, stepsLeft: steps, visitedStars: new Set() }];
         const reachable = new Set();
-        const visited = new Map();
-        
+        const visited = new Set();
+
         const makeKey = (pos, stepsLeft, visitedStars) => {
             const starList = Array.from(visitedStars).sort().join(',');
             return `${pos},${stepsLeft},${starList}`;
         };
-        
+
         while (queue.length > 0) {
-            const {pos, stepsLeft, visitedStars} = queue.shift();
+            const { pos, stepsLeft, visitedStars } = queue.shift();
             const key = makeKey(pos, stepsLeft, visitedStars);
-            
             if (visited.has(key)) continue;
-            visited.set(key, true);
-            
+            visited.add(key);
+
+            // If we've used all steps, this is a valid destination
             if (stepsLeft === 0) {
                 if (pos !== currentPosition && !wouldBlockSelf(allMarbles, movingIndex, pos)) {
                     reachable.add(pos);
                 }
                 continue;
             }
-            
-            // Always allow moving forward 1 step
+
+            // Normal forward 1 step along path
             const nextPos = (pos + 1) % 56;
-            queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
-            
-            // Star hopping only works if we're still at the starting position AND it's a star
-            // You can't hop to stars you reach mid-move
+            queue.push({ pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+
+            // If nextPos is a STAR, you can optionally move INTO the CENTER (distance 1 from that star)
+            // This models the center being adjacent to the star squares.
+            if (isStarPosition(nextPos)) {
+                queue.push({ pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+            }
+
+            // Star teleporting: only allowed if we START on a star (not if we pass through)
             if (pos === currentPosition && isStarPosition(pos)) {
-                // Can also hop to another unvisited star (costs 1 step)
                 for (const starPos of STAR_POSITIONS) {
                     if (starPos !== pos && !visitedStars.has(starPos)) {
                         const newVisited = new Set(visitedStars);
                         newVisited.add(starPos);
-                        queue.push({pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited});
+                        queue.push({ pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited });
                     }
                 }
             }
         }
-        
+
         return Array.from(reachable);
     };
-    
+
     const showValidDestinations = (marbleIndex) => {
         if (!currentGameState || currentPlayerIndex === -1) return;
         const myPlayer = currentGameState.players[currentPlayerIndex];
         const diceValue = currentGameState.last_roll;
         const currentPos = myPlayer.marbles[marbleIndex];
-        
+
         const validDests = getValidDestinations(currentPos, diceValue, currentPlayerIndex, myPlayer.marbles, marbleIndex);
-        
+
         validDests.forEach(destPos => {
             const coords = getMarbleCoords(destPos, currentPlayerIndex);
             if (coords) {
@@ -424,9 +440,6 @@
         });
     };
 
-    function setMarbles() {
-
-    }
     // init browser
     function init() {
         for (let y = 0; y < 19; y++) {
@@ -438,15 +451,15 @@
                 myDiv.setAttribute('data-y', y)
                 myDiv.title = `${x}, ${y}`
 
-                playArea.appendChild(myDiv)
+                playAreaDiv.appendChild(myDiv)
             }
         }
         colorCells()
-        
+
         // Add click handler for marbles and destinations using event delegation
-        playArea.addEventListener('click', (event) => {
+        playAreaDiv.addEventListener('click', (event) => {
             const target = event.target;
-            
+
             // Click on a marble - select it and show valid destinations
             if (target.classList.contains('clickable-marble')) {
                 const marbleIndex = parseInt(target.getAttribute('data-marble-index'));
@@ -464,9 +477,9 @@
             else if (target.classList.contains('clickable-destination')) {
                 const destination = parseInt(target.getAttribute('data-destination'));
                 if (!isNaN(destination) && selectedMarble !== null) {
-                    wsSafeSend({ 
-                        type: 'move_marble', 
-                        playerId: player.id, 
+                    wsSafeSend({
+                        type: 'move_marble',
+                        playerId: player.id,
                         gameCode: game.code,
                         marbleIndex: selectedMarble,
                         destination: destination
@@ -604,13 +617,8 @@
             wsConnected = true;
             disconnectAt = null;
             setConnStatus(true, 'Connected');
-            ws.send(JSON.stringify({ type: 'identify', id: player.id, name: player.name }));
-            heartbeatTimer = setInterval(() => {
-                console.log(game)
-                if (game.code) {
-                    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'heartbeat', playerId: player.id, gameCode: game.code }));
-                }
-            }, 1000);
+            ws.send(JSON.stringify({ type: 'identify', playerId: player.id, playerName: player.name }));
+
         });
 
         ws.addEventListener('message', (ev) => {

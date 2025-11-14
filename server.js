@@ -1,15 +1,16 @@
 /* eslint-disable no-console */
-
-const fs = require("fs");
 const path = require("path");
 const http = require("http");
 const express = require("express");
-const { v4: uuidv4 } = require("uuid");
 const WebSocket = require("ws");
 
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT) || 5000;
 const PING_INTERVAL_MS = 20_000;
+
+// Star and center space positions on the path
+const STAR_POSITIONS = [7, 21, 35, 49];
+const CENTER_POSITION = 999;
 
 const token8 = () => {
   const t = Date.now(); // current time in ms
@@ -48,18 +49,6 @@ const canMoveFromHome = (diceValue) => {
   return diceValue === 1 || diceValue === 6;
 };
 
-const getNextPosition = (currentPosition, steps, playerIndex) => {
-  if (isHomePosition(currentPosition, playerIndex)) {
-    if (canMoveFromHome(steps)) {
-      return getStartPosition(playerIndex);
-    }
-    return null;
-  }
-  
-  const nextPos = (currentPosition + steps) % 56;
-  return nextPos;
-};
-
 const hasValidMoves = (game, playerIndex, diceValue) => {
   const player = game.players[playerIndex];
   if (!player) return false;
@@ -89,8 +78,7 @@ const advanceTurn = (game) => {
   game.last_roll = null;
 };
 
-// Star space positions on the path
-const STAR_POSITIONS = [7, 21, 35, 49];
+
 
 const isStarPosition = (position) => {
   return STAR_POSITIONS.includes(position);
@@ -99,7 +87,17 @@ const isStarPosition = (position) => {
 // Calculate all valid destinations from a position with given steps
 // Returns array of possible destination positions (only positions using EXACT steps)
 // Star hopping only works if you START on a star (not if you pass through one)
+// center entry must be exact.  center exit is only on dice roll of 1
 const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
+  // If currently in center: only exit on exact roll 1 to any star position
+  if (currentPosition === CENTER_POSITION) {
+    if (steps === 1) {
+      // return all star positions you can move to (not blocked by self)
+      return STAR_POSITIONS.filter(starPos => !wouldBlockSelf(allMarbles, movingIndex, starPos));
+    }
+    return [];
+  }
+
   // If in home, can only move to start position with 1 or 6
   if (isHomePosition(currentPosition, playerIndex)) {
     if (canMoveFromHome(steps)) {
@@ -110,25 +108,23 @@ const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, m
     }
     return [];
   }
-  
-  // BFS to explore all paths step-by-step
-  // State: {pos, stepsLeft, visitedStars}
+
+  // BFS to explore all paths step-by-step (exact steps)
   const queue = [{pos: currentPosition, stepsLeft: steps, visitedStars: new Set()}];
   const reachable = new Set();
-  const visited = new Map(); // key: "pos,stepsLeft,visitedStars", value: true
-  
+  const visited = new Set();
+
   const makeKey = (pos, stepsLeft, visitedStars) => {
     const starList = Array.from(visitedStars).sort().join(',');
     return `${pos},${stepsLeft},${starList}`;
   };
-  
+
   while (queue.length > 0) {
     const {pos, stepsLeft, visitedStars} = queue.shift();
     const key = makeKey(pos, stepsLeft, visitedStars);
-    
     if (visited.has(key)) continue;
-    visited.set(key, true);
-    
+    visited.add(key);
+
     // If we've used all steps, this is a valid destination
     if (stepsLeft === 0) {
       if (pos !== currentPosition && !wouldBlockSelf(allMarbles, movingIndex, pos)) {
@@ -136,15 +132,19 @@ const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, m
       }
       continue;
     }
-    
-    // Always allow moving forward 1 step
+
+    // Normal forward 1 step along path
     const nextPos = (pos + 1) % 56;
     queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
-    
-    // Star hopping only works if we're still at the starting position AND it's a star
-    // You can't hop to stars you reach mid-move
+
+    // If nextPos is a STAR, you can optionally move INTO the CENTER (distance 1 from that star)
+    // This models the center being adjacent to the star squares.
+    if (isStarPosition(nextPos)) {
+      queue.push({pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
+    }
+
+    // Star teleporting: only allowed if we START on a star (not if we pass through)
     if (pos === currentPosition && isStarPosition(pos)) {
-      // Can also hop to another unvisited star (costs 1 step)
       for (const starPos of STAR_POSITIONS) {
         if (starPos !== pos && !visitedStars.has(starPos)) {
           const newVisited = new Set(visitedStars);
@@ -154,7 +154,7 @@ const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, m
       }
     }
   }
-  
+
   return Array.from(reachable);
 };
 
@@ -240,7 +240,6 @@ wss.on("connection", (ws) => {
     } catch (e) {
       return;
     }
-    const now = Date.now();
 
     switch (msg.type) {
       case "roll_dice":
@@ -260,8 +259,6 @@ wss.on("connection", (ws) => {
         const diceValue = rollDice();
         game.last_roll = diceValue;
         game.phase = 'awaiting_move';
-        
-        logEvent(game, `${state.players[msg.playerId].name} rolled a ${diceValue}`);
         
         if (!hasValidMoves(game, game.player_index, diceValue)) {
           logEvent(game, `No valid moves available. Turn skipped.`);
@@ -339,12 +336,6 @@ wss.on("connection", (ws) => {
         if (!state.games[msg.gameCode].players) return;
         if (state.games[msg.gameCode].players.length == 0) return;
 
-        /*
-        if (state.games[msg.gameCode].players[0].marbles){
-          state.games[msg.gameCode].players[0].marbles[0]++
-        }
-        */
-
         send(ws, {
           type: "game_info",
           game: state.games[msg.gameCode],
@@ -411,13 +402,7 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    if (ws.playerId) {
-      const p = state.players.get(ws.playerId);
-      if (p) {
-        p.connected = false;
-        p.lastSeen = Date.now();
-      }
-    }
+    
   });
 });
 
