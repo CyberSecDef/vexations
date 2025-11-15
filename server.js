@@ -22,141 +22,23 @@ const token8 = () => {
     .slice(0, 8); // keep 8 chars
 };
 
-const rollDice = () => {
-  return Math.floor(Math.random() * 6) + 1;
-};
+// Game helper functions: use shared implementation to avoid duplication
+// Import the canonical rules from src/shared so server and client stay in sync
+const {
+  getHomePositions,
+  getStartPosition,
+  isHomePosition,
+  canMoveFromHome,
+  hasValidMoves,
+  wouldBlockSelf,
+  isStarPosition,
+  getValidDestinations,
+  rollDice
+} = require('./src/shared/gameRules');
 
-// Game helper functions
-const getHomePositions = (playerIndex) => {
-  const homes = [
-    [101, 102, 103, 104],
-    [201, 202, 203, 204],
-    [301, 302, 303, 304],
-    [401, 402, 403, 404]
-  ];
-  return homes[playerIndex] || [];
-};
-
-const getStartPosition = (playerIndex) => {
-  return [0, 14, 28, 42][playerIndex] || 0;
-};
-
-const isHomePosition = (position, playerIndex) => {
-  return getHomePositions(playerIndex).includes(position);
-};
-
-const canMoveFromHome = (diceValue) => {
-  return diceValue === 1 || diceValue === 6;
-};
-
-const hasValidMoves = (game, playerIndex, diceValue) => {
-  const player = game.players[playerIndex];
-  if (!player) return false;
-  
-  for (let i = 0; i < player.marbles.length; i++) {
-    const pos = player.marbles[i];
-    const validDests = getValidDestinations(pos, diceValue, playerIndex, player.marbles, i);
-    if (validDests.length > 0) {
-      return true;
-    }
-  }
-  return false;
-};
-
-const wouldBlockSelf = (marbles, movingIndex, targetPosition) => {
-  for (let i = 0; i < marbles.length; i++) {
-    if (i !== movingIndex && marbles[i] === targetPosition) {
-      return true;
-    }
-  }
-  return false;
-};
-
-const advanceTurn = (game) => {
-  game.player_index = (game.player_index + 1) % game.players.length;
-  game.phase = 'awaiting_roll';
-  game.last_roll = null;
-};
-
-
-
-const isStarPosition = (position) => {
-  return STAR_POSITIONS.includes(position);
-};
-
-// Calculate all valid destinations from a position with given steps
-// Returns array of possible destination positions (only positions using EXACT steps)
-// Star hopping only works if you START on a star (not if you pass through one)
-// center entry must be exact.  center exit is only on dice roll of 1
-const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
-  // If currently in center: only exit on exact roll 1 to any star position
-  if (currentPosition === CENTER_POSITION) {
-    if (steps === 1) {
-      // return all star positions you can move to (not blocked by self)
-      return STAR_POSITIONS.filter(starPos => !wouldBlockSelf(allMarbles, movingIndex, starPos));
-    }
-    return [];
-  }
-
-  // If in home, can only move to start position with 1 or 6
-  if (isHomePosition(currentPosition, playerIndex)) {
-    if (canMoveFromHome(steps)) {
-      const startPos = getStartPosition(playerIndex);
-      if (!wouldBlockSelf(allMarbles, movingIndex, startPos)) {
-        return [startPos];
-      }
-    }
-    return [];
-  }
-
-  // BFS to explore all paths step-by-step (exact steps)
-  const queue = [{pos: currentPosition, stepsLeft: steps, visitedStars: new Set()}];
-  const reachable = new Set();
-  const visited = new Set();
-
-  const makeKey = (pos, stepsLeft, visitedStars) => {
-    const starList = Array.from(visitedStars).sort().join(',');
-    return `${pos},${stepsLeft},${starList}`;
-  };
-
-  while (queue.length > 0) {
-    const {pos, stepsLeft, visitedStars} = queue.shift();
-    const key = makeKey(pos, stepsLeft, visitedStars);
-    if (visited.has(key)) continue;
-    visited.add(key);
-
-    // If we've used all steps, this is a valid destination
-    if (stepsLeft === 0) {
-      if (pos !== currentPosition && !wouldBlockSelf(allMarbles, movingIndex, pos)) {
-        reachable.add(pos);
-      }
-      continue;
-    }
-
-    // Normal forward 1 step along path
-    const nextPos = (pos + 1) % 56;
-    queue.push({pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
-
-    // If nextPos is a STAR, you can optionally move INTO the CENTER (distance 1 from that star)
-    // This models the center being adjacent to the star squares.
-    if (isStarPosition(nextPos)) {
-      queue.push({pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars)});
-    }
-
-    // Star teleporting: only allowed if we START on a star (not if we pass through)
-    if (pos === currentPosition && isStarPosition(pos)) {
-      for (const starPos of STAR_POSITIONS) {
-        if (starPos !== pos && !visitedStars.has(starPos)) {
-          const newVisited = new Set(visitedStars);
-          newVisited.add(starPos);
-          queue.push({pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited});
-        }
-      }
-    }
-  }
-
-  return Array.from(reachable);
-};
+// Use canonical turn advancement logic from server game modules
+const { advanceTurn } = require('./src/server/game/turnManager');
+const { sanitizeName, send } = require('./src/server/utils/helpers');
 
 const app = express();
 
@@ -182,44 +64,8 @@ let state = {
 const server = http.createServer(app);
 
 let wss = null;
-
-// send to everyone
-function broadcast(obj) {
-  // No-op if wss isn't initialized yet (e.g., during boot logging)
-  if (!wss || wss.clients.size === 0) return;
-  const payload = JSON.stringify(obj);
-  for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) client.send(payload);
-  }
-}
-
-function fullSnapshot() {
-  // Provide the minimum to recreate UI
-  return {
-    type: "snapshot",
-  };
-}
-
-function send(ws, obj) {
-  try {
-    ws.send(JSON.stringify(obj));
-  } catch (e) {
-    /* noop */
-  }
-}
-
-function sanitizeName(name) {
-  if (!name || typeof name !== "string") return "Player";
-  return name.trim().slice(0, 16) || "Player";
-}
-
-function logEvent(game, message) {
-  const entry = { ts: Date.now(), message };
-  if (!game.event_log) game.event_log = [];
-  game.event_log.push(entry);
-  if (game.event_log.length > 100) game.event_log.shift();
-  broadcast({ type: "eventLog", event: entry });
-}
+const { broadcast, setWebSocketServer } = require('./src/server/core/broadcast');
+const { logEvent } = require('./src/server/utils/logger');
 
 // WS connection handling
 wss = new WebSocket.Server({ server });
@@ -230,7 +76,9 @@ wss.on("connection", (ws) => {
     ws.isAlive = true;
   });
   send(ws, { type: "hello", serverTime: Date.now() });
-  send(ws, fullSnapshot());
+  
+  // ensure shared broadcast helper knows about this wss instance
+  try { setWebSocketServer(wss); } catch (e) { /* noop */ }
 
   ws.on("message", (raw) => {
     let msg;
@@ -261,7 +109,7 @@ wss.on("connection", (ws) => {
         game.phase = 'awaiting_move';
         
         if (!hasValidMoves(game, game.player_index, diceValue)) {
-          logEvent(game, `No valid moves available. Turn skipped.`);
+          logEvent(game, `No valid moves available. Turn skipped.`, broadcast);
           advanceTurn(game);
         }
         
@@ -301,7 +149,7 @@ wss.on("connection", (ws) => {
         
         currentPlayer.marbles[marbleIndex] = destination;
         
-        logEvent(moveGame, `${state.players[msg.playerId].name} moved marble to position ${destination}`);
+  logEvent(moveGame, `${state.players[msg.playerId].name} moved marble to position ${destination}`, broadcast);
         
         // Check for collisions with other players
         for (let i = 0; i < moveGame.players.length; i++) {
@@ -312,7 +160,7 @@ wss.on("connection", (ws) => {
                 const homePos = getHomePositions(i)[j];
                 otherPlayer.marbles[j] = homePos;
                 const otherPlayerName = state.players[otherPlayer.id]?.name || 'Player';
-                logEvent(moveGame, `${otherPlayerName}'s marble was sent home!`);
+                logEvent(moveGame, `${otherPlayerName}'s marble was sent home!`, broadcast);
               }
             }
           }
@@ -320,7 +168,7 @@ wss.on("connection", (ws) => {
         
         // Handle turn advancement
         if (moveGame.last_roll === 6) {
-          logEvent(moveGame, `${state.players[msg.playerId].name} rolled a 6 and gets another turn!`);
+          logEvent(moveGame, `${state.players[msg.playerId].name} rolled a 6 and gets another turn!`, broadcast);
           moveGame.phase = 'awaiting_roll';
           moveGame.last_roll = null;
         } else {

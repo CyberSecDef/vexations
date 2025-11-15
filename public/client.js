@@ -130,7 +130,7 @@
         console.log(msg)
         switch (msg.type) {
             case 'dice_roll':
-                rollDie({ duration: 1600, tick: 60, result: msg.dice })
+                rollDie({ duration: 100, tick: 60, result: msg.dice })
                 break;
             case 'game_info':
                 game.setCode(msg.game.code)
@@ -212,8 +212,14 @@
                             $(`div.board-space[data-x='0'][data-y='7']`).removeClass().addClass(homeSpaceClass)
                         }
 
-                        if (m < 100) {
+                        // Only color if this marble is on the normal path (index within path bounds).
+                        if (typeof m === 'number' && m >= 0 && m < path.length) {
                             $(`div.board-space[data-x='${path[m].x}'][data-y='${path[m].y}']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                        }
+
+                        if (m > path.length && m < 100){
+                            const c = getMarbleCoords(m, i);
+                            if (c) $(`div.board-space[data-x='${c.x}'][data-y='${c.y}']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`);
                         }
 
                         if (m === CENTER_POSITION) {
@@ -255,37 +261,23 @@
         }
     }
 
-    // Helper functions for game logic
-    const getHomePositions = (playerIndex) => {
-        const homes = [
-            [101, 102, 103, 104],
-            [201, 202, 203, 204],
-            [301, 302, 303, 304],
-            [401, 402, 403, 404]
-        ];
-        return homes[playerIndex] || [];
-    };
+    // Helper functions for game logic — rely entirely on GameShared (no local fallbacks)
+    if (typeof GameShared === 'undefined') {
+        console.error('GameShared is not available. Ensure /shared.js is loaded before /client.js');
+    }
 
-    const isHomePosition = (position, playerIndex) => {
-        return getHomePositions(playerIndex).includes(position);
-    };
+    // Enable verbose debug logging for move highlighting in the browser
+    const DEBUG_GAME = true;
 
-    const canMoveFromHome = (diceValue) => {
-        return diceValue === 1 || diceValue === 6;
-    };
+    const getHomePositions = (playerIndex) => GameShared.getHomePositions(playerIndex);
 
-    const getStartPosition = (playerIndex) => {
-        return [0, 14, 28, 42][playerIndex] || 0;
-    };
+    const isHomePosition = (position, playerIndex) => GameShared.isHomePosition(position, playerIndex);
 
-    const wouldBlockSelf = (marbles, movingIndex, targetPosition) => {
-        for (let i = 0; i < marbles.length; i++) {
-            if (i !== movingIndex && marbles[i] === targetPosition) {
-                return true;
-            }
-        }
-        return false;
-    };
+    const canMoveFromHome = (diceValue) => GameShared.canMoveFromHome(diceValue);
+
+    const getStartPosition = (playerIndex) => GameShared.getStartPosition(playerIndex);
+
+    const wouldBlockSelf = (marbles, movingIndex, targetPosition) => GameShared.wouldBlockSelf(marbles, movingIndex, targetPosition);
 
     const canMoveMarble = (marbleIndex, playerIndex, diceValue) => {
         if (!currentGameState || !currentGameState.players[playerIndex]) return false;
@@ -303,8 +295,13 @@
         const myPlayer = currentGameState.players[currentPlayerIndex];
         const diceValue = currentGameState.last_roll;
 
+        if (DEBUG_GAME) console.log('[DBG] enableMarbleClicks', { currentPlayerIndex, diceValue, marbles: myPlayer.marbles });
+
         myPlayer.marbles.forEach((marblePos, marbleIndex) => {
-            if (canMoveMarble(marbleIndex, currentPlayerIndex, diceValue)) {
+            // compute valid destinations and log them for debugging
+            const validDests = getValidDestinations(marblePos, diceValue, currentPlayerIndex, myPlayer.marbles, marbleIndex);
+            if (DEBUG_GAME) console.log('[DBG] marble', marbleIndex, 'pos', marblePos, 'validDests', validDests);
+            if (validDests.length > 0) {
                 const coords = getMarbleCoords(marblePos, currentPlayerIndex);
                 if (coords) {
                     const elem = $(`div.board-space[data-x='${coords.x}'][data-y='${coords.y}']`);
@@ -316,7 +313,9 @@
     };
 
     const getMarbleCoords = (position, playerIndex) => {
-        if (position < 100) {
+        // Only treat as a path index if it's within the path array bounds.
+        // Base positions were encoded as 56..71 and should NOT be treated as path indices.
+        if (typeof position === 'number' && position >= 0 && position < path.length) {
             return path[position];
         }
 
@@ -327,7 +326,19 @@
             401: { x: 0, y: 7 }, 402: { x: 0, y: 8 }, 403: { x: 0, y: 10 }, 404: { x: 0, y: 11 }
         };
         if (position === CENTER_POSITION) return { x: 9, y: 9 };
-        return homeCoords[position] || null;
+        // Base positions (encoded 56..71) map to board coordinates for each player's base
+        // Player 0 bases: 56-59 -> {9,3}, {9,4}, {9,5}, {9,6}
+        // Player 1 bases: 60-63 -> {15,9}, {14,9}, {13,9}, {12,9}
+        // Player 2 bases: 64-67 -> {9,15}, {9,14}, {9,13}, {9,12}
+        // Player 3 bases: 68-71 -> {3,9}, {4,9}, {5,9}, {6,9}
+        const baseMap = {
+            56: { x: 9, y: 3 }, 57: { x: 9, y: 4 }, 58: { x: 9, y: 5 }, 59: { x: 9, y: 6 },
+            60: { x: 15, y: 9 }, 61: { x: 14, y: 9 }, 62: { x: 13, y: 9 }, 63: { x: 12, y: 9 },
+            64: { x: 9, y: 15 }, 65: { x: 9, y: 14 }, 66: { x: 9, y: 13 }, 67: { x: 9, y: 12 },
+            68: { x: 3, y: 9 }, 69: { x: 4, y: 9 }, 70: { x: 5, y: 9 }, 71: { x: 6, y: 9 }
+        };
+
+        return homeCoords[position] || baseMap[position] || null;
     };
 
     const disableAllMarbleClicks = () => {
@@ -341,85 +352,11 @@
     // Track selected marble
     let selectedMarble = null;
 
-    // Star positions matching server
-    const STAR_POSITIONS = [7, 21, 35, 49];
+    // Use GameShared for star checks and valid destinations
+    const isStarPosition = (position) => GameShared.isStarPosition(position);
 
-    const isStarPosition = (position) => {
-        return STAR_POSITIONS.includes(position);
-    };
-
-    // Calculate all valid destinations from a position with given steps
-    // Returns array of possible destination positions (only positions using EXACT steps)
-    // Star hopping only works if you START on a star (not if you pass through one)
-    // center entry must be exact.  center exit is only on dice roll of 1
     const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
-        // If currently in center: only exit on exact roll 1 to any star position
-        if (currentPosition === CENTER_POSITION) {
-            if (steps === 1) {
-                // return all star positions you can move to (not blocked by self)
-                return STAR_POSITIONS.filter(starPos => !wouldBlockSelf(allMarbles, movingIndex, starPos));
-            }
-            return [];
-        }
-
-        // If in home, can only move to start position with 1 or 6
-        if (isHomePosition(currentPosition, playerIndex)) {
-            if (canMoveFromHome(steps)) {
-                const startPos = getStartPosition(playerIndex);
-                if (!wouldBlockSelf(allMarbles, movingIndex, startPos)) {
-                    return [startPos];
-                }
-            }
-            return [];
-        }
-
-        // BFS to explore all paths step-by-step (exact steps)
-        const queue = [{ pos: currentPosition, stepsLeft: steps, visitedStars: new Set() }];
-        const reachable = new Set();
-        const visited = new Set();
-
-        const makeKey = (pos, stepsLeft, visitedStars) => {
-            const starList = Array.from(visitedStars).sort().join(',');
-            return `${pos},${stepsLeft},${starList}`;
-        };
-
-        while (queue.length > 0) {
-            const { pos, stepsLeft, visitedStars } = queue.shift();
-            const key = makeKey(pos, stepsLeft, visitedStars);
-            if (visited.has(key)) continue;
-            visited.add(key);
-
-            // If we've used all steps, this is a valid destination
-            if (stepsLeft === 0) {
-                if (pos !== currentPosition && !wouldBlockSelf(allMarbles, movingIndex, pos)) {
-                    reachable.add(pos);
-                }
-                continue;
-            }
-
-            // Normal forward 1 step along path
-            const nextPos = (pos + 1) % 56;
-            queue.push({ pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
-
-            // If nextPos is a STAR, you can optionally move INTO the CENTER (distance 1 from that star)
-            // This models the center being adjacent to the star squares.
-            if (isStarPosition(nextPos)) {
-                queue.push({ pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
-            }
-
-            // Star teleporting: only allowed if we START on a star (not if we pass through)
-            if (pos === currentPosition && isStarPosition(pos)) {
-                for (const starPos of STAR_POSITIONS) {
-                    if (starPos !== pos && !visitedStars.has(starPos)) {
-                        const newVisited = new Set(visitedStars);
-                        newVisited.add(starPos);
-                        queue.push({ pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited });
-                    }
-                }
-            }
-        }
-
-        return Array.from(reachable);
+        return GameShared.getValidDestinations(currentPosition, steps, playerIndex, allMarbles, movingIndex);
     };
 
     const showValidDestinations = (marbleIndex) => {
@@ -428,14 +365,20 @@
         const diceValue = currentGameState.last_roll;
         const currentPos = myPlayer.marbles[marbleIndex];
 
+        if (DEBUG_GAME) console.log('[DBG] showValidDestinations', { marbleIndex, currentPos, diceValue, marbles: myPlayer.marbles });
         const validDests = getValidDestinations(currentPos, diceValue, currentPlayerIndex, myPlayer.marbles, marbleIndex);
+        if (DEBUG_GAME) console.log('[DBG] validDests for selected marble', validDests);
 
         validDests.forEach(destPos => {
             const coords = getMarbleCoords(destPos, currentPlayerIndex);
+            if (DEBUG_GAME) console.log('[DBG] dest mapping', { destPos, coords });
             if (coords) {
                 const elem = $(`div.board-space[data-x='${coords.x}'][data-y='${coords.y}']`);
+                if (DEBUG_GAME) console.log('[DBG] dest element length', { destPos, len: elem.length });
                 elem.addClass('clickable-destination');
                 elem.attr('data-destination', destPos);
+            } else {
+                if (DEBUG_GAME) console.warn('[DBG] no coords for destPos', destPos);
             }
         });
     };
@@ -581,7 +524,7 @@
         return "uuid-" + Math.random().toString(36).substring(2) + Date.now().toString(36)
     }
 
-    async function rollDie({ duration = 1400, tick = 70, result } = {}) {
+    async function rollDie({ duration = 100, tick = 70, result } = {}) {
         const die = document.getElementById('die');
 
         die.classList.add('shake');
