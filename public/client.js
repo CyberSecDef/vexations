@@ -87,7 +87,21 @@
     ]
 
     //normal path through gameboard
-    globalThis.path = [{ "x": 9, "y": 2 }, { "x": 10, "y": 2 }, { "x": 11, "y": 2 }, { "x": 11, "y": 3 }, { "x": 11, "y": 4 }, { "x": 11, "y": 5 }, { "x": 11, "y": 6 }, { "x": 11, "y": 7 }, { "x": 12, "y": 7 }, { "x": 13, "y": 7 }, { "x": 14, "y": 7 }, { "x": 15, "y": 7 }, { "x": 16, "y": 7 }, { "x": 16, "y": 8 }, { "x": 16, "y": 9 }, { "x": 16, "y": 10 }, { "x": 16, "y": 11 }, { "x": 15, "y": 11 }, { "x": 14, "y": 11 }, { "x": 13, "y": 11 }, { "x": 12, "y": 11 }, { "x": 11, "y": 11 }, { "x": 11, "y": 12 }, { "x": 11, "y": 13 }, { "x": 11, "y": 14 }, { "x": 11, "y": 15 }, { "x": 11, "y": 16 }, { "x": 10, "y": 16 }, { "x": 9, "y": 16 }, { "x": 8, "y": 16 }, { "x": 7, "y": 16 }, { "x": 7, "y": 15 }, { "x": 7, "y": 14 }, { "x": 7, "y": 13 }, { "x": 7, "y": 12 }, { "x": 7, "y": 11 }, { "x": 6, "y": 11 }, { "x": 5, "y": 11 }, { "x": 4, "y": 11 }, { "x": 3, "y": 11 }, { "x": 2, "y": 11 }, { "x": 2, "y": 10 }, { "x": 2, "y": 9 }, { "x": 2, "y": 8 }, { "x": 2, "y": 7 }, { "x": 3, "y": 7 }, { "x": 4, "y": 7 }, { "x": 5, "y": 7 }, { "x": 6, "y": 7 }, { "x": 7, "y": 7 }, { "x": 7, "y": 6 }, { "x": 7, "y": 5 }, { "x": 7, "y": 4 }, { "x": 7, "y": 3 }, { "x": 7, "y": 2 }, { "x": 8, "y": 2 }]
+    globalThis.path = [{ "x": 9, "y": 2 }, { "x": 10, "y": 2 }, { "x": 11, "y": 2 }, 
+        { "x": 11, "y": 3 }, { "x": 11, "y": 4 }, { "x": 11, "y": 5 }, { "x": 11, "y": 6 }, 
+        { "x": 11, "y": 7 }, { "x": 12, "y": 7 }, { "x": 13, "y": 7 }, { "x": 14, "y": 7 }, 
+        { "x": 15, "y": 7 }, { "x": 16, "y": 7 }, { "x": 16, "y": 8 }, { "x": 16, "y": 9 }, 
+        { "x": 16, "y": 10 }, { "x": 16, "y": 11 }, { "x": 15, "y": 11 }, { "x": 14, "y": 11 }, 
+        { "x": 13, "y": 11 }, { "x": 12, "y": 11 }, { "x": 11, "y": 11 }, { "x": 11, "y": 12 }, 
+        { "x": 11, "y": 13 }, { "x": 11, "y": 14 }, { "x": 11, "y": 15 }, { "x": 11, "y": 16 }, 
+        { "x": 10, "y": 16 }, { "x": 9, "y": 16 }, { "x": 8, "y": 16 }, { "x": 7, "y": 16 }, 
+        { "x": 7, "y": 15 }, { "x": 7, "y": 14 }, { "x": 7, "y": 13 }, { "x": 7, "y": 12 }, 
+        { "x": 7, "y": 11 }, { "x": 6, "y": 11 }, { "x": 5, "y": 11 }, { "x": 4, "y": 11 }, 
+        { "x": 3, "y": 11 }, { "x": 2, "y": 11 }, { "x": 2, "y": 10 }, { "x": 2, "y": 9 }, 
+        { "x": 2, "y": 8 }, { "x": 2, "y": 7 }, { "x": 3, "y": 7 }, { "x": 4, "y": 7 }, 
+        { "x": 5, "y": 7 }, { "x": 6, "y": 7 }, { "x": 7, "y": 7 }, { "x": 7, "y": 6 }, 
+        { "x": 7, "y": 5 }, { "x": 7, "y": 4 }, { "x": 7, "y": 3 }, { "x": 7, "y": 2 }, 
+        { "x": 8, "y": 2 }]
 
     gameCodeInput.addEventListener('keyup', (event) => {
         gameCodeInput.value = gameCodeInput.value.replaceAll(/[^a-zA-Z0-9]+/g, "").substr(0, 8)
@@ -130,7 +144,9 @@
         console.log(msg)
         switch (msg.type) {
             case 'dice_roll':
-                rollDie({ duration: 1600, tick: 60, result: msg.dice })
+                if (!msg.robot) {
+                    rollDie({ duration: 1600, tick: 60, result: msg.dice })
+                }
                 break;
             case 'game_info':
                 game.setCode(msg.game.code)
@@ -324,7 +340,7 @@
             101: { x: 7, y: 0 }, 102: { x: 8, y: 0 }, 103: { x: 10, y: 0 }, 104: { x: 11, y: 0 },
             201: { x: 18, y: 7 }, 202: { x: 18, y: 8 }, 203: { x: 18, y: 10 }, 204: { x: 18, y: 11 },
             301: { x: 11, y: 18 }, 302: { x: 10, y: 18 }, 303: { x: 8, y: 18 }, 304: { x: 7, y: 18 },
-            401: { x: 0, y: 7 }, 402: { x: 0, y: 8 }, 403: { x: 0, y: 10 }, 404: { x: 0, y: 11 }
+            401: { x: 0, y: 11 }, 402: { x: 0, y: 10 }, 403: { x: 0, y: 8 }, 404: { x: 0, y: 7 }
         };
         if (position === CENTER_POSITION) return { x: 9, y: 9 };
         return homeCoords[position] || null;
@@ -399,18 +415,26 @@
 
             // Normal forward 1 step along path
             const nextPos = (pos + 1) % 56;
-            queue.push({ pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+            // do not allow passing through your own marble - skip this step if blocked
+            if (!wouldBlockSelf(allMarbles, movingIndex, nextPos)) {
+                queue.push({ pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+            }
 
             // If nextPos is a STAR, you can optionally move INTO the CENTER (distance 1 from that star)
             // This models the center being adjacent to the star squares.
             if (isStarPosition(nextPos)) {
-                queue.push({ pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+                // moving from a star into the center: only allow if center isn't occupied by own marble
+                if (!wouldBlockSelf(allMarbles, movingIndex, CENTER_POSITION)) {
+                    queue.push({ pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+                }
             }
 
             // Star teleporting: only allowed if we START on a star (not if we pass through)
             if (pos === currentPosition && isStarPosition(pos)) {
                 for (const starPos of STAR_POSITIONS) {
                     if (starPos !== pos && !visitedStars.has(starPos)) {
+                        // don't teleport to a star occupied by your own marble
+                        if (wouldBlockSelf(allMarbles, movingIndex, starPos)) continue;
                         const newVisited = new Set(visitedStars);
                         newVisited.add(starPos);
                         queue.push({ pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited });
