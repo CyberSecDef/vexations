@@ -1,6 +1,5 @@
 /**
  * Central broadcast helper for WebSocket server instances.
- * Allows multiple entrypoints (legacy `server.js` and new `src/server/index.js`)
  * to share a single `broadcast` implementation without causing circular
  * requires or double-server startup.
  */

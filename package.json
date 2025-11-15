@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server/index.js",
     "dev": "NODE_ENV=development node src/server/index.js",
-    "start:legacy": "node server.js",
+    
     "build:shared": "node build/generate-shared-client.js"
   },
   "engines": {

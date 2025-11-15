@@ -39,6 +39,10 @@ const { setWebSocketServer, broadcast } = require('./core/broadcast');
 const wss = initializeWebSocket(server, state, broadcast);
 setWebSocketServer(wss);
 
+// Start bot scanner (server-side bots)
+const { startPeriodicScanner } = require('./bots/botRunner');
+startPeriodicScanner(state, broadcast);
+
 // Start liveness ping
 const pingInterval = startLivenessPing(wss);
 

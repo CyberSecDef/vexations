@@ -7,6 +7,8 @@ const { handleDiceRoll } = require('../game/turnManager');
 const { handleMarbleMove } = require('../game/moveHandler');
 const { identifyPlayer } = require('../core/playerManager');
 const { send } = require('../utils/helpers');
+const { handleAddBot } = require('./addBotHandler');
+const { handleRestartGame } = require('./restartHandler');
 
 /**
  * Route incoming WebSocket messages
@@ -19,6 +21,12 @@ function handleMessage(ws, msg, state, broadcast) {
   switch (msg.type) {
     case "roll_dice":
       handleRollDice(ws, msg, state, broadcast);
+      break;
+    case "add_bot":
+      handleAddBot(ws, msg, state, broadcast);
+      break;
+    case "restart_game":
+      handleRestartGame(ws, msg, state, broadcast);
       break;
     case "move_marble":
       handleMoveMarble(ws, msg, state, broadcast);

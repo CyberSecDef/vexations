@@ -16,9 +16,14 @@
     const splashDiv = document.getElementById('splash')
     const playAreaContainer = document.getElementById('playAreaContainer')
     const diceRollBtn = document.getElementById('diceRollBtn')
+    const addBotBtn = document.getElementById('addBotBtn')
+    const gameCodeSpan = document.getElementById('gameCodeSpan')
+    const copyGameCodeBtn = document.getElementById('copyGameCodeBtn')
 
     const connDot = document.getElementById('connDot')
     const connText = document.getElementById('connText')
+    const playerCountSpan = document.getElementById('playerCount')
+    const leaderboardDiv = document.getElementById('leaderboardList')
 
 
 
@@ -27,6 +32,12 @@
         setCode(code) {
             this.code = code;
             gameCodeInput.value = this.code;
+            // Update visible game code in the UI if present and non-empty
+            try {
+                if (gameCodeSpan) {
+                    gameCodeSpan.textContent = (this.code && this.code.toString().trim() !== '') ? this.code : '';
+                }
+            } catch (e) {}
             this.save();
         },
         save() {
@@ -103,6 +114,43 @@
     diceRollBtn.addEventListener('click', (event) => {
         wsSafeSend({ type: 'roll_dice', playerId: player.id, gameCode: game.code })
     })
+
+    // Add Bot button - requests server to add a bot named "Echo" to the current game
+    if (addBotBtn) {
+        addBotBtn.addEventListener('click', (ev) => {
+            if (!game.code) return;
+            // disable immediately to avoid duplicate requests; server will broadcast game_info
+                addBotBtn.disabled = true;
+                addBotBtn.textContent = 'Adding...';
+                const payload = { type: 'add_bot', gameCode: game.code, name: 'Echo', requestedBy: player.id };
+                
+                // Ensure we're actually part of the game before requesting a bot
+                if (!currentGameState || !Array.isArray(currentGameState.players) || !currentGameState.players.some(p => p.id === player.id)) {
+                    console.warn('Cannot add bot: you are not a member of this game or game state not loaded');
+                    addBotBtn.disabled = false;
+                    addBotBtn.textContent = '🤖';
+                    return;
+                }
+
+                const sent = wsSafeSend(payload);
+                if (!sent) {
+                    // revert immediately if send failed
+                    addBotBtn.disabled = false;
+                    addBotBtn.textContent = '🤖';
+                }
+
+            // Safety: if server doesn't respond within 5s, revert button so user can retry
+            setTimeout(() => {
+                try {
+                    if (addBotBtn && addBotBtn.textContent === 'Adding...') {
+                        addBotBtn.disabled = false;
+                        addBotBtn.textContent = '🤖';
+                        console.warn('Add Bot timed out — no response from server');
+                    }
+                } catch (e) {}
+            }, 5000);
+        });
+    }
     playBtn.addEventListener('click', (event) => {
         if (player.name.trim() == "") {
             nameCheck.classList.remove('d-none')
@@ -132,9 +180,32 @@
             case 'dice_roll':
                 rollDie({ duration: 100, tick: 60, result: msg.dice })
                 break;
+            case 'add_bot_ack':
+                // Server acknowledgement for add_bot request
+                if (msg.ok) {
+                    if (addBotBtn) {
+                        addBotBtn.disabled = true;
+                        addBotBtn.textContent = '🤖';
+                    }
+                } else {
+                    if (addBotBtn) {
+                        addBotBtn.disabled = false;
+                        addBotBtn.textContent = '🤖';
+                    }
+                    console.warn('Add Bot failed:', msg.reason || 'unknown');
+                }
+                break;
             case 'game_info':
                 game.setCode(msg.game.code)
                 currentGameState = msg.game;
+
+                // Update player count display
+                try {
+                    if (playerCountSpan) playerCountSpan.textContent = Array.isArray(msg.game.players) ? msg.game.players.length : 0;
+                } catch (e) {}
+
+                // Update leaderboard (use server-side snapshot if provided in msg.s)
+                try { updateLeaderboard(msg.game, msg.s); } catch (e) {}
 
                 // Find current player's index
                 currentPlayerIndex = -1;
@@ -143,6 +214,13 @@
                         currentPlayerIndex = i;
                     }
                 });
+
+                // Enable/disable the Add Bot button: only allow one bot per game
+                if (addBotBtn) {
+                    const hasBot = Array.isArray(msg.game.players) && msg.game.players.some(p => p && typeof p.id === 'string' && p.id.startsWith('bot-'));
+                    addBotBtn.disabled = hasBot || (Array.isArray(msg.game.players) && msg.game.players.length >= 4);
+                    //addBotBtn.textContent = hasBot ? 'Bot Added' : '🤖';
+                }
 
                 colorCells()
                 disableAllMarbleClicks();
@@ -217,7 +295,7 @@
                             $(`div.board-space[data-x='${path[m].x}'][data-y='${path[m].y}']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
                         }
 
-                        if (m > path.length && m < 100){
+                        if (m >= path.length && m < 100){
                             const c = getMarbleCoords(m, i);
                             if (c) $(`div.board-space[data-x='${c.x}'][data-y='${c.y}']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`);
                         }
@@ -233,6 +311,15 @@
                     enableMarbleClicks();
                 }
 
+                break;
+            case 'game_over':
+                // show winner modal with confetti
+                try {
+                    const winner = msg.winner || (msg.game && msg.game.winner);
+                    if (winner) {
+                        showWinnerModal(winner.name || 'Player');
+                    }
+                } catch (e) {}
                 break;
             case 'identified':
                 player.setName(msg.player.name)
@@ -266,9 +353,7 @@
         console.error('GameShared is not available. Ensure /shared.js is loaded before /client.js');
     }
 
-    // Enable verbose debug logging for move highlighting in the browser
-    const DEBUG_GAME = true;
-
+    
     const getHomePositions = (playerIndex) => GameShared.getHomePositions(playerIndex);
 
     const isHomePosition = (position, playerIndex) => GameShared.isHomePosition(position, playerIndex);
@@ -295,12 +380,9 @@
         const myPlayer = currentGameState.players[currentPlayerIndex];
         const diceValue = currentGameState.last_roll;
 
-        if (DEBUG_GAME) console.log('[DBG] enableMarbleClicks', { currentPlayerIndex, diceValue, marbles: myPlayer.marbles });
-
         myPlayer.marbles.forEach((marblePos, marbleIndex) => {
             // compute valid destinations and log them for debugging
             const validDests = getValidDestinations(marblePos, diceValue, currentPlayerIndex, myPlayer.marbles, marbleIndex);
-            if (DEBUG_GAME) console.log('[DBG] marble', marbleIndex, 'pos', marblePos, 'validDests', validDests);
             if (validDests.length > 0) {
                 const coords = getMarbleCoords(marblePos, currentPlayerIndex);
                 if (coords) {
@@ -359,27 +441,66 @@
         return GameShared.getValidDestinations(currentPosition, steps, playerIndex, allMarbles, movingIndex);
     };
 
+    const getBasePositions = (playerIndex) => GameShared.getBasePositions ? GameShared.getBasePositions(playerIndex) : [];
+
+    // Update leaderboard UI with count of marbles in base per player
+    function updateLeaderboard(game, stateSnapshot) {
+        try {
+            if (!leaderboardDiv) return;
+            leaderboardDiv.innerHTML = '';
+            if (!game || !Array.isArray(game.players)) return;
+
+            const list = document.createElement('div');
+            list.className = 'list-group';
+
+            game.players.forEach((p, i) => {
+                const basePositions = getBasePositions(i) || [];
+                const inBaseCount = Array.isArray(p.marbles) ? p.marbles.filter(m => basePositions.includes(m)).length : 0;
+
+                // Try to get player name from state snapshot if provided
+                let displayName = (stateSnapshot && stateSnapshot.players && stateSnapshot.players[p.id] && stateSnapshot.players[p.id].name) || p.name || p.id || `P${i+1}`;
+                if (typeof displayName === 'string' && displayName.length > 18) displayName = displayName.substr(0, 16) + '…';
+
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                // color indicator
+                const nameWrap = document.createElement('div');
+                nameWrap.innerHTML = `<span class="fw-semibold">${escapeHtml(displayName)}</span>`;
+                const badge = document.createElement('span');
+                badge.className = `badge bg-primary rounded-pill`;
+                badge.textContent = `${inBaseCount}/4`;
+
+                item.appendChild(nameWrap);
+                item.appendChild(badge);
+                list.appendChild(item);
+            });
+
+            leaderboardDiv.appendChild(list);
+        } catch (e) {
+            // ignore UI errors
+        }
+    }
+
+    // small helper to escape HTML when injecting names
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
     const showValidDestinations = (marbleIndex) => {
         if (!currentGameState || currentPlayerIndex === -1) return;
         const myPlayer = currentGameState.players[currentPlayerIndex];
         const diceValue = currentGameState.last_roll;
         const currentPos = myPlayer.marbles[marbleIndex];
 
-        if (DEBUG_GAME) console.log('[DBG] showValidDestinations', { marbleIndex, currentPos, diceValue, marbles: myPlayer.marbles });
         const validDests = getValidDestinations(currentPos, diceValue, currentPlayerIndex, myPlayer.marbles, marbleIndex);
-        if (DEBUG_GAME) console.log('[DBG] validDests for selected marble', validDests);
-
+        
         validDests.forEach(destPos => {
             const coords = getMarbleCoords(destPos, currentPlayerIndex);
-            if (DEBUG_GAME) console.log('[DBG] dest mapping', { destPos, coords });
             if (coords) {
                 const elem = $(`div.board-space[data-x='${coords.x}'][data-y='${coords.y}']`);
-                if (DEBUG_GAME) console.log('[DBG] dest element length', { destPos, len: elem.length });
                 elem.addClass('clickable-destination');
                 elem.attr('data-destination', destPos);
-            } else {
-                if (DEBUG_GAME) console.warn('[DBG] no coords for destPos', destPos);
-            }
+            } 
         });
     };
 
@@ -466,7 +587,7 @@
                         $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-primary bg-primary bg-opacity-25')
                         break;
                     case 3:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-primary bg-opacity-75')
+                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-primary bg-opacity-50')
                         break;
                     case 4:
                         $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-warning border-2 bg-warning bg-opacity-25')
@@ -475,19 +596,19 @@
                         $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-warning bg-warning bg-opacity-25')
                         break;
                     case 6:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-warning bg-opacity-75')
+                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-warning bg-opacity-50')
                         break;
                     case 7:
                         $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-success bg-success bg-opacity-25')
                         break;
                     case 8:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-dark border-1 bg-success bg-opacity-75')
+                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-dark border-1 bg-success bg-opacity-50')
                         break;
                     case 9:
                         $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-danger bg-danger bg-opacity-25')
                         break;
                     case 10:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-danger bg-opacity-75')
+                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-danger bg-opacity-50')
                         break;
                     case 11:
                         $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-danger border-2 bg-danger bg-opacity-25')
@@ -607,7 +728,100 @@
 
     function wsSafeSend(obj) {
         console.log(obj)
-        try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); } catch { }
+        try {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(obj));
+                return true;
+            }
+        } catch (e) {
+            console.error('[DBG] ws send error', e);
+        }
+        return false;
+    }
+
+    // Expose small debug helpers on window so you can inspect client state from the browser console.
+    // Use these in the console like: VEX.getWSState(), VEX.getGameState(), VEX.getPlayer()
+    try {
+        window.VEX = window.VEX || {};
+        window.VEX.getWSState = () => (typeof ws !== 'undefined' ? (ws ? ws.readyState : null) : null);
+        window.VEX.getGameState = () => currentGameState;
+        window.VEX.getPlayer = () => ({ id: player.id, name: player.name });
+        window.VEX.send = (o) => { wsSafeSend(o); };        
+    } catch (e) {
+        // ignore if window isn't available
+    }
+
+    // Winner modal helpers and confetti
+    const winnerModal = document.getElementById('winnerModal');
+    const winnerNameEl = document.getElementById('winnerName');
+    const winnerCloseBtn = document.getElementById('winnerCloseBtn');
+    const confettiContainer = document.getElementById('confettiContainer');
+    let confettiTimer = null;
+
+    function clearConfetti() {
+        if (confettiTimer) {
+            clearInterval(confettiTimer);
+            confettiTimer = null;
+        }
+        if (confettiContainer) confettiContainer.innerHTML = '';
+    }
+
+    function startConfetti() {
+        if (!confettiContainer) return;
+        clearConfetti();
+        const colors = ['#ff5c5c','#ffd166','#06d6a0','#118ab2','#9b5de5','#f15bb5'];
+        confettiTimer = setInterval(() => {
+            const el = document.createElement('div');
+            const size = 6 + Math.random() * 10;
+            el.style.position = 'absolute';
+            el.style.left = (20 + Math.random() * 380) + 'px';
+            el.style.top = '-20px';
+            el.style.width = `${size}px`;
+            el.style.height = `${size * 0.6}px`;
+            el.style.background = colors[Math.floor(Math.random() * colors.length)];
+            el.style.opacity = '0.95';
+            el.style.transform = `rotate(${Math.random()*360}deg)`;
+            el.style.borderRadius = '2px';
+            confettiContainer.appendChild(el);
+            const fall = 2000 + Math.random() * 2000;
+            const drift = (Math.random() - 0.5) * 100;
+            const start = performance.now();
+            const id = setInterval(() => {
+                const t = (performance.now() - start) / fall;
+                if (t >= 1) {
+                    clearInterval(id);
+                    try { confettiContainer.removeChild(el); } catch (e) {}
+                    return;
+                }
+                el.style.top = (t * 140) + 'px';
+                el.style.left = (parseFloat(el.style.left) + drift * 0.01) + 'px';
+            }, 16);
+        }, 100);
+    }
+
+    function showWinnerModal(name) {
+        try {
+            if (winnerNameEl) winnerNameEl.textContent = name;
+            if (winnerModal) winnerModal.style.display = 'flex';
+            startConfetti();
+        } catch (e) {}
+    }
+
+    function hideWinnerModal() {
+        try {
+            if (winnerModal) winnerModal.style.display = 'none';
+            clearConfetti();
+        } catch (e) {}
+    }
+
+    if (winnerCloseBtn) {
+        winnerCloseBtn.addEventListener('click', (ev) => {
+            // request server to restart game
+            try {
+                wsSafeSend({ type: 'restart_game', gameCode: (game && game.code) ? game.code : '' });
+            } catch (e) {}
+            hideWinnerModal();
+        });
     }
 
     // Kick things off

@@ -192,6 +192,27 @@ footer.tiny {
     #playArea {
         order: 1
     }
+
+}
+
+/* Mobile-specific board sizing: make board spaces smaller for narrow screens */
+@media (max-width:480px) {
+    .board-space {
+        width: 18px !important;
+        height: 18px !important;
+        border-radius: 9px;
+    }
+
+    /* ensure the grid uses fixed-size columns to avoid stretching */
+    .playarea {
+        grid-template-columns: repeat(19, 18px);
+    }
+
+    /* adjust container width to fit the compact grid */
+    .playarea-container {
+        width: 346px; /* 19 * 18px + borders */
+        margin: auto;
+    }
 }
 
 .wrap {
@@ -203,8 +224,8 @@ footer.tiny {
 }
 
 .die {
-    width: 64px;
-    height: 64px;
+    width: 32px;
+    height: 32px;
     display: grid;
     place-items: center;
     border-radius: 14px;
@@ -212,13 +233,19 @@ footer.tiny {
     color:#000;
     box-shadow: 0 6px 18px rgba(0, 0, 0, .1);
     border: 2px solid #e7ecff;
-    font-size: 40px;
+    font-size: 20px;
     user-select: none;
 }
 
 .die_status {
     color: #6b7280;
     min-width: 8ch
+}
+
+#addBotBtn{
+    font-weight:bold;
+    margin:0px;
+    height:46px;
 }
 
 .shake {

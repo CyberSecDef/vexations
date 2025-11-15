@@ -6,6 +6,7 @@ const { getValidDestinations } = require('../../shared/gameRules');
 const { handleCollisions } = require('./collisionHandler');
 const { advanceTurn } = require('./turnManager');
 const { logEvent } = require('../utils/logger');
+const { checkForWinner } = require('./winner');
 
 /**
  * Handle a marble move request
@@ -56,6 +57,13 @@ function handleMarbleMove(game, playerId, marbleIndex, destination, state, broad
 
   // Check for collisions
   handleCollisions(game, destination, game.player_index, state, broadcast);
+
+  // Check for a winner after the move/collisions
+  const winner = checkForWinner(game, state, broadcast);
+  if (winner) {
+    // game phase and broadcast handled by checkForWinner
+    return true;
+  }
 
   // Handle turn advancement
   if (game.last_roll === 6) {
