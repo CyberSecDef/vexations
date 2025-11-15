@@ -1,27 +1,35 @@
 (() => {
-    // Initialize Variables
+    // ========================================================================
+    // CONSTANTS AND CONFIGURATION
+    // ========================================================================
+    
     const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
     const FACES = ["\u2680", "\u2681", "\u2682", "\u2683", "\u2684", "\u2685"];
-    const PLAYER_CLASSES = ["primary", "warning", "success", "danger"]
+    const PLAYER_CLASSES = ["primary", "warning", "success", "danger"];
     const CENTER_POSITION = 999;
-
-    // DOM
+    const STAR_POSITIONS = [7, 21, 35, 49];
+    
+    // ========================================================================
+    // DOM ELEMENTS
+    // ========================================================================
+    
     const nameInput = document.getElementById('nameInput');
     const nameCheck = document.getElementById('nameCheck');
     const charsRemainingNameSpan = document.getElementById('charsRemainingName');
     const gameCodeInput = document.getElementById('gameCode');
     const charsRemainingCodeSpan = document.getElementById('charsRemainingCode');
-    const playAreaDiv = document.getElementById('playAreaDiv')
-    const playBtn = document.getElementById('playBtn')
-    const splashDiv = document.getElementById('splash')
-    const playAreaContainer = document.getElementById('playAreaContainer')
-    const diceRollBtn = document.getElementById('diceRollBtn')
-
-    const connDot = document.getElementById('connDot')
-    const connText = document.getElementById('connText')
-
-
-
+    const playAreaDiv = document.getElementById('playAreaDiv');
+    const playBtn = document.getElementById('playBtn');
+    const splashDiv = document.getElementById('splash');
+    const playAreaContainer = document.getElementById('playAreaContainer');
+    const diceRollBtn = document.getElementById('diceRollBtn');
+    const connDot = document.getElementById('connDot');
+    const connText = document.getElementById('connText');
+    
+    // ========================================================================
+    // GAME STATE
+    // ========================================================================
+    
     const game = {
         code: "",
         setCode(code) {
@@ -33,27 +41,26 @@
             setCookie('gameCode', this.code);
             setSaved('gameCode', this.code);
         }
-    }
+    };
+    
     const player = {
         id: getCookie('playerId') || getSaved('playerId') || randUUID(),
         name: getSaved('playerName', ''),
         class: "",
         setName(name) {
-            this.name = name
-            nameInput.value = this.name
-            this.save()
+            this.name = name;
+            nameInput.value = this.name;
+            this.save();
         },
         save() {
             setCookie('playerId', this.id);
             setSaved('playerId', this.id);
-
             setCookie('playerName', this.name);
             setSaved('playerName', this.name);
-
             setCookie('playerClass', this.class);
             setSaved('playerClass', this.class);
         }
-    }
+    };
 
     let ws;
     let wsConnected = false;
@@ -63,7 +70,13 @@
     let heartbeatTimer;
     let currentGameState = null;
     let currentPlayerIndex = -1;
+    let selectedMarble = null;
 
+    // ========================================================================
+    // BOARD CONFIGURATION
+    // ========================================================================
+    
+    // Board mask defines the visual layout (0=invisible, 1-14=player areas)
     let mask = [
         [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -84,6 +97,41 @@
         [0, 0, 0, 0, 0, 0, 0, 7, 7, 8, 7, 7, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 12, 12, 0, 12, 12, 0, 0, 0, 0, 0, 0, 0]
+    ];
+
+    // Normal path through gameboard (56 positions)
+    globalThis.path = [
+        { "x": 9, "y": 2 }, { "x": 10, "y": 2 }, { "x": 11, "y": 2 }, { "x": 11, "y": 3 }, 
+        { "x": 11, "y": 4 }, { "x": 11, "y": 5 }, { "x": 11, "y": 6 }, { "x": 11, "y": 7 }, 
+        { "x": 12, "y": 7 }, { "x": 13, "y": 7 }, { "x": 14, "y": 7 }, { "x": 15, "y": 7 }, 
+        { "x": 16, "y": 7 }, { "x": 16, "y": 8 }, { "x": 16, "y": 9 }, { "x": 16, "y": 10 }, 
+        { "x": 16, "y": 11 }, { "x": 15, "y": 11 }, { "x": 14, "y": 11 }, { "x": 13, "y": 11 }, 
+        { "x": 12, "y": 11 }, { "x": 11, "y": 11 }, { "x": 11, "y": 12 }, { "x": 11, "y": 13 }, 
+        { "x": 11, "y": 14 }, { "x": 11, "y": 15 }, { "x": 11, "y": 16 }, { "x": 10, "y": 16 }, 
+        { "x": 9, "y": 16 }, { "x": 8, "y": 16 }, { "x": 7, "y": 16 }, { "x": 7, "y": 15 }, 
+        { "x": 7, "y": 14 }, { "x": 7, "y": 13 }, { "x": 7, "y": 12 }, { "x": 7, "y": 11 }, 
+        { "x": 6, "y": 11 }, { "x": 5, "y": 11 }, { "x": 4, "y": 11 }, { "x": 3, "y": 11 }, 
+        { "x": 2, "y": 11 }, { "x": 2, "y": 10 }, { "x": 2, "y": 9 }, { "x": 2, "y": 8 }, 
+        { "x": 2, "y": 7 }, { "x": 3, "y": 7 }, { "x": 4, "y": 7 }, { "x": 5, "y": 7 }, 
+        { "x": 6, "y": 7 }, { "x": 7, "y": 7 }, { "x": 7, "y": 6 }, { "x": 7, "y": 5 }, 
+        { "x": 7, "y": 4 }, { "x": 7, "y": 3 }, { "x": 7, "y": 2 }, { "x": 8, "y": 2 }
+    ];
+    
+    // Home position coordinates mapping
+    const HOME_COORDS = {
+        101: { x: 7, y: 0 }, 102: { x: 8, y: 0 }, 103: { x: 10, y: 0 }, 104: { x: 11, y: 0 },
+        201: { x: 18, y: 7 }, 202: { x: 18, y: 8 }, 203: { x: 18, y: 10 }, 204: { x: 18, y: 11 },
+        301: { x: 11, y: 18 }, 302: { x: 10, y: 18 }, 303: { x: 8, y: 18 }, 304: { x: 7, y: 18 },
+        401: { x: 0, y: 11 }, 402: { x: 0, y: 10 }, 403: { x: 0, y: 8 }, 404: { x: 0, y: 7 }
+    };
+    
+    // ========================================================================
+    // EVENT LISTENERS
+    // ========================================================================
+    
+    // ========================================================================
+    // EVENT LISTENERS
+    // ========================================================================
     ]
 
     //normal path through gameboard
@@ -104,36 +152,54 @@
         { "x": 8, "y": 2 }]
 
     gameCodeInput.addEventListener('keyup', (event) => {
-        gameCodeInput.value = gameCodeInput.value.replaceAll(/[^a-zA-Z0-9]+/g, "").substr(0, 8)
-        charsRemainingCodeSpan.textContent = (8 - gameCodeInput.value.length) + " characters remaining"
-    })
+        gameCodeInput.value = gameCodeInput.value.replaceAll(/[^a-zA-Z0-9]+/g, "").substr(0, 8);
+        charsRemainingCodeSpan.textContent = (8 - gameCodeInput.value.length) + " characters remaining";
+    });
 
     nameInput.addEventListener('keyup', (event) => {
-        let n = nameInput.value.replaceAll(/[^a-zA-Z0-9 ]+/g, "").substr(0, 32)
-        charsRemainingNameSpan.textContent = (32 - n.length) + " characters remaining."
-        player.setName(n)
-    })
+        let n = nameInput.value.replaceAll(/[^a-zA-Z0-9 ]+/g, "").substr(0, 32);
+        charsRemainingNameSpan.textContent = (32 - n.length) + " characters remaining.";
+        player.setName(n);
+    });
 
     diceRollBtn.addEventListener('click', (event) => {
-        wsSafeSend({ type: 'roll_dice', playerId: player.id, gameCode: game.code })
-    })
+        wsSafeSend({ type: 'roll_dice', playerId: player.id, gameCode: game.code });
+    });
+
     playBtn.addEventListener('click', (event) => {
         if (player.name.trim() == "") {
-            nameCheck.classList.remove('d-none')
-            nameInput.classList.add('border', 'border-danger')
-            return
+            nameCheck.classList.remove('d-none');
+            nameInput.classList.add('border', 'border-danger');
+            return;
         }
 
-        //ensure the player exists
-        wsSafeSend({ type: 'identify', playerId: player.id, playerName: player.name })
+        // Ensure the player exists
+        wsSafeSend({ type: 'identify', playerId: player.id, playerName: player.name });
 
-        //create the game if it doesn't exist
-        if (gameCodeInput.value.toString().trim() == "") { //create a new game
-            wsSafeSend({ type: 'new_game' })
+        // Create the game if it doesn't exist
+        if (gameCodeInput.value.toString().trim() == "") {
+            wsSafeSend({ type: 'new_game' });
         }
 
-        //join the game
+        // Join the game
         setTimeout(() => {
+            wsSafeSend({ type: 'join_game', playerId: player.id, gameCode: gameCodeInput.value });
+            playAreaContainer.classList.remove('d-none');
+            splashDiv.classList.add('d-none');
+        }, 1000);
+    });
+    
+    // ========================================================================
+    // GAME LOGIC HELPERS
+    // ========================================================================
+    
+    // ========================================================================
+    // GAME LOGIC HELPERS
+    // ========================================================================
+
+    /**
+     * Get home positions for a specific player
+     */
             wsSafeSend({ type: 'join_game', playerId: player.id, gameCode: gameCodeInput.value })
             playAreaContainer.classList.remove('d-none')
             splashDiv.classList.add('d-none')
@@ -282,18 +348,30 @@
         return homes[playerIndex] || [];
     };
 
+    /**
+     * Check if position is a home position for a player
+     */
     const isHomePosition = (position, playerIndex) => {
         return getHomePositions(playerIndex).includes(position);
     };
 
+    /**
+     * Check if dice value allows moving from home
+     */
     const canMoveFromHome = (diceValue) => {
         return diceValue === 1 || diceValue === 6;
     };
 
+    /**
+     * Get start position for a specific player
+     */
     const getStartPosition = (playerIndex) => {
         return [0, 14, 28, 42][playerIndex] || 0;
     };
 
+    /**
+     * Check if marble would block another marble from same player
+     */
     const wouldBlockSelf = (marbles, movingIndex, targetPosition) => {
         for (let i = 0; i < marbles.length; i++) {
             if (i !== movingIndex && marbles[i] === targetPosition) {
@@ -303,6 +381,9 @@
         return false;
     };
 
+    /**
+     * Check if position is a star position
+     */
     const canMoveMarble = (marbleIndex, playerIndex, diceValue) => {
         if (!currentGameState || !currentGameState.players[playerIndex]) return false;
         const player = currentGameState.players[playerIndex];
@@ -364,15 +445,14 @@
         return STAR_POSITIONS.includes(position);
     };
 
-    // Calculate all valid destinations from a position with given steps
-    // Returns array of possible destination positions (only positions using EXACT steps)
-    // Star hopping only works if you START on a star (not if you pass through one)
-    // center entry must be exact.  center exit is only on dice roll of 1
+    /**
+     * Calculate valid destinations using BFS pathfinding
+     * Handles star hopping and center position mechanics
+     */
     const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, movingIndex) => {
         // If currently in center: only exit on exact roll 1 to any star position
         if (currentPosition === CENTER_POSITION) {
             if (steps === 1) {
-                // return all star positions you can move to (not blocked by self)
                 return STAR_POSITIONS.filter(starPos => !wouldBlockSelf(allMarbles, movingIndex, starPos));
             }
             return [];
@@ -420,8 +500,7 @@
                 queue.push({ pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
             }
 
-            // If nextPos is a STAR, you can optionally move INTO the CENTER (distance 1 from that star)
-            // This models the center being adjacent to the star squares.
+            // If nextPos is a STAR, you can optionally move INTO the CENTER
             if (isStarPosition(nextPos)) {
                 // moving from a star into the center: only allow if center isn't occupied by own marble
                 if (!wouldBlockSelf(allMarbles, movingIndex, CENTER_POSITION)) {
@@ -429,7 +508,7 @@
                 }
             }
 
-            // Star teleporting: only allowed if we START on a star (not if we pass through)
+            // Star teleporting: only allowed if we START on a star
             if (pos === currentPosition && isStarPosition(pos)) {
                 for (const starPos of STAR_POSITIONS) {
                     if (starPos !== pos && !visitedStars.has(starPos)) {
@@ -446,6 +525,155 @@
         return Array.from(reachable);
     };
 
+    /**
+     * Check if a marble can move with current dice value
+     */
+    const canMoveMarble = (marbleIndex, playerIndex, diceValue) => {
+        if (!currentGameState || !currentGameState.players[playerIndex]) return false;
+        const player = currentGameState.players[playerIndex];
+        const currentPos = player.marbles[marbleIndex];
+        const validDests = getValidDestinations(currentPos, diceValue, playerIndex, player.marbles, marbleIndex);
+        return validDests.length > 0;
+    };
+
+    /**
+     * Get marble coordinates on the board
+     */
+    const getMarbleCoords = (position, playerIndex) => {
+        if (position < 100) {
+            return globalThis.path[position];
+        }
+        if (position === CENTER_POSITION) {
+            return { x: 9, y: 9 };
+        }
+        return HOME_COORDS[position] || null;
+    };
+    
+    // ========================================================================
+    // UI RENDERING FUNCTIONS
+    // ========================================================================
+        console.log(msg)
+        switch (msg.type) {
+            case 'dice_roll':
+                rollDie({ duration: 1600, tick: 60, result: msg.dice })
+                break;
+            case 'game_info':
+                game.setCode(msg.game.code)
+                currentGameState = msg.game;
+
+                // Find current player's index
+                currentPlayerIndex = -1;
+                msg.game.players.forEach((p, i) => {
+                    if (p.id === player.id) {
+                        currentPlayerIndex = i;
+                    }
+                });
+
+                colorCells();
+                disableAllMarbleClicks();
+                updateMarblePositions(msg.game.players);
+
+                diceRollBtn.className = '';
+                diceRollBtn.classList.add('rounded', 'btn', `btn-${PLAYER_CLASSES[msg.game.player_index]}`);
+
+                const isMyTurn = msg.game.players[msg.game.player_index] && 
+                                msg.game.players[msg.game.player_index].id === player.id;
+                const awaitingRoll = msg.game.phase === 'awaiting_roll';
+                const awaitingMove = msg.game.phase === 'awaiting_move';
+
+                diceRollBtn.disabled = !(isMyTurn && awaitingRoll);
+
+                if (isMyTurn && awaitingMove) {
+                    enableMarbleClicks();
+                }
+
+                break;
+            case 'identified':
+                player.setName(msg.player.name)
+                break
+            case 'eventLog':
+                if (msg.event) {
+                    const eventLog = document.getElementById('eventLog');
+                    if (eventLog) {
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'line';
+                        const time = new Date(msg.event.ts).toLocaleTimeString();
+                        eventDiv.innerHTML = `<span class="ts">${time}</span>${msg.event.message}`;
+                        eventLog.insertBefore(eventDiv, eventLog.firstChild);
+
+                        // Keep only last 20 events
+                        while (eventLog.children.length > 20) {
+                            eventLog.removeChild(eventLog.lastChild);
+                        }
+                    }
+                }
+                break
+            case 'hello':
+                break;
+            default:
+                break;
+        }
+    }
+    
+    // ========================================================================
+    // UI RENDERING FUNCTIONS
+    // ========================================================================
+
+    /**
+     * Update marble positions on the board based on home coordinate mapping
+     */
+    const updateMarblePositions = (players) => {
+        players.forEach((p, i) => {
+            let homeSpaceClass = `board-space border-2 border border-${PLAYER_CLASSES[i]} bg-${PLAYER_CLASSES[i]}`;
+            p.marbles.forEach((marblePos, j) => {
+                const coords = getMarbleCoords(marblePos, i);
+                if (coords) {
+                    const elem = $(`div.board-space[data-x='${coords.x}'][data-y='${coords.y}']`);
+                    if (marblePos >= 100 && marblePos < 1000) {
+                        // Home position
+                        elem.removeClass().addClass(homeSpaceClass);
+                    } else {
+                        // On path or center
+                        elem.removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`);
+                    }
+                }
+            });
+        });
+    };
+
+    /**
+     * Enable clickable marbles for current player
+     */
+    const enableMarbleClicks = () => {
+        if (!currentGameState || currentPlayerIndex === -1) return;
+        if (currentGameState.phase !== 'awaiting_move') return;
+        if (currentGameState.players[currentGameState.player_index].id !== player.id) return;
+
+        const myPlayer = currentGameState.players[currentPlayerIndex];
+        const diceValue = currentGameState.last_roll;
+
+        myPlayer.marbles.forEach((marblePos, marbleIndex) => {
+            if (canMoveMarble(marbleIndex, currentPlayerIndex, diceValue)) {
+                const coords = getMarbleCoords(marblePos, currentPlayerIndex);
+                if (coords) {
+                    const elem = $(`div.board-space[data-x='${coords.x}'][data-y='${coords.y}']`);
+                    elem.addClass('clickable-marble');
+                    elem.attr('data-marble-index', marbleIndex);
+                }
+            }
+        });
+    };
+
+    /**
+     * Disable all marble click handlers
+     */
+    const disableAllMarbleClicks = () => {
+        $('.clickable-marble').removeClass('clickable-marble').removeAttr('data-marble-index');
+    };
+
+    /**
+     * Show valid destinations for a selected marble
+     */
     const showValidDestinations = (marbleIndex) => {
         if (!currentGameState || currentPlayerIndex === -1) return;
         const myPlayer = currentGameState.players[currentPlayerIndex];
@@ -464,8 +692,52 @@
         });
     };
 
-    // init browser
-    function init() {
+    /**
+     * Disable all destination markers
+     */
+    const disableAllDestinations = () => {
+        $('.clickable-destination').removeClass('clickable-destination').removeAttr('data-destination');
+    };
+
+    /**
+     * Color cells based on mask (board layout)
+     */
+    function colorCells() {
+        const maskStyles = {
+            0: 'board-space invisible',
+            1: 'board-space border border-primary border-2 bg-primary bg-opacity-25',
+            2: 'board-space border border-primary bg-primary bg-opacity-25',
+            3: 'board-space  border border-dark border-1 bg-primary bg-opacity-75',
+            4: 'board-space border border-warning border-2 bg-warning bg-opacity-25',
+            5: 'board-space border border-warning bg-warning bg-opacity-25',
+            6: 'board-space  border border-dark border-1 bg-warning bg-opacity-75',
+            7: 'board-space border border-success bg-success bg-opacity-25',
+            8: 'board-space border border-dark border-1 bg-success bg-opacity-75',
+            9: 'board-space border border-danger bg-danger bg-opacity-25',
+            10: 'board-space  border border-dark border-1 bg-danger bg-opacity-75',
+            11: 'board-space border border-danger border-2 bg-danger bg-opacity-25',
+            12: 'board-space border border-success border-2 bg-success bg-opacity-25',
+            13: 'board-space border border-info border-2 bg-info bg-opacity-25',
+            14: 'board-space border border-dark border-2 bg-dark bg-opacity-50'
+        };
+
+        for (let y = 0; y < 19; y++) {
+            for (let x = 0; x < 19; x++) {
+                const maskValue = mask[y][x];
+                const styleClass = maskStyles[maskValue] || 'board-space';
+                $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass(styleClass);
+            }
+        }
+    }
+    
+    // ========================================================================
+    // MESSAGE HANDLERS
+    // ========================================================================
+
+    /**
+     * Handle incoming WebSocket messages
+     */
+    function handleMessage(msg) {
         for (let y = 0; y < 19; y++) {
             for (let x = 0; x < 19; x++) {
 
@@ -522,71 +794,10 @@
             }
         });
     }
-    function marchCells() {
-        let idx = 0;
-        setInterval(() => {
-            console.log(globalThis.path[idx])
-            colorCells()
-            $(`div.board-space[data-x='${globalThis.path[idx].x}'][data-y='${globalThis.path[idx].y}']`).removeClass().addClass('board-space bg-primary')
-
-            idx++
-        }, 1000)
-    }
-
-    function colorCells() {
-        for (let y = 0; y < 19; y++) {
-            for (let x = 0; x < 19; x++) {
-                switch (mask[y][x]) {
-                    case 0:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space invisible')
-                        break;
-                    case 1:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-primary border-2 bg-primary bg-opacity-25')
-                        break;
-                    case 2:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-primary bg-primary bg-opacity-25')
-                        break;
-                    case 3:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-primary bg-opacity-75')
-                        break;
-                    case 4:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-warning border-2 bg-warning bg-opacity-25')
-                        break;
-                    case 5:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-warning bg-warning bg-opacity-25')
-                        break;
-                    case 6:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-warning bg-opacity-75')
-                        break;
-                    case 7:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-success bg-success bg-opacity-25')
-                        break;
-                    case 8:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-dark border-1 bg-success bg-opacity-75')
-                        break;
-                    case 9:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-danger bg-danger bg-opacity-25')
-                        break;
-                    case 10:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space  border border-dark border-1 bg-danger bg-opacity-75')
-                        break;
-                    case 11:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-danger border-2 bg-danger bg-opacity-25')
-                        break;
-                    case 12:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-success border-2 bg-success bg-opacity-25')
-                        break;
-                    case 13:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-info border-2 bg-info bg-opacity-25')
-                        break;
-                    case 14:
-                        $(`div.board-space[data-x='${x}'][data-y='${y}']`).removeClass().addClass('board-space border border-dark border-2 bg-dark bg-opacity-50')
-                        break;
-                }
-            }
-        }
-    }
-
+    
+    // ========================================================================
+    // UTILITY FUNCTIONS
+    // ========================================================================
 
     // Persistence
     function getSaved(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } }
@@ -600,11 +811,18 @@
         document.cookie = `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/; SameSite=Lax`;
     }
 
-    // utilities
+    // Random UUID generator
     function randUUID() {
-        return "uuid-" + Math.random().toString(36).substring(2) + Date.now().toString(36)
+        return "uuid-" + Math.random().toString(36).substring(2) + Date.now().toString(36);
     }
+    
+    // ========================================================================
+    // DICE ANIMATION
+    // ========================================================================
 
+    /**
+     * Animate dice roll
+     */
     async function rollDie({ duration = 1400, tick = 70, result } = {}) {
         const die = document.getElementById('die');
 
@@ -631,8 +849,14 @@
         };
         cycle();
     }
+    
+    // ========================================================================
+    // WEBSOCKET CONNECTION
+    // ========================================================================
 
-    // websocket
+    /**
+     * Establish WebSocket connection to server
+     */
     function connect() {
         ws = new WebSocket(WS_URL);
         setConnStatus(false, 'Connecting…');

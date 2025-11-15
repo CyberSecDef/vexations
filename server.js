@@ -4,6 +4,10 @@ const http = require("http");
 const express = require("express");
 const WebSocket = require("ws");
 
+// Import configuration and modules
+const { HOST, PORT, PING_INTERVAL_MS } = require("./src/config/constants");
+const { handleMessage } = require("./src/websocket/handlers");
+const { logEvent } = require("./src/game/state");
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT) || 5000;
 const PING_INTERVAL_MS = 20_000;
@@ -355,8 +359,10 @@ const getValidDestinations = (currentPosition, steps, playerIndex, allMarbles, m
   return Array.from(reachable);
 };
 
+// Express app setup
 const app = express();
 
+// Cache control middleware
 app.use((req, res, next) => {
   res.setHeader(
     "Cache-Control",
@@ -380,7 +386,10 @@ const server = http.createServer(app);
 
 let wss = null;
 
-// send to everyone
+/**
+ * Broadcast message to all connected clients
+ * @param {Object} obj - Object to broadcast
+ */
 function broadcast(obj) {
   // No-op if wss isn't initialized yet (e.g., during boot logging)
   if (!wss || wss.clients.size === 0) return;
@@ -390,6 +399,10 @@ function broadcast(obj) {
   }
 }
 
+/**
+ * Create full snapshot of server state
+ * @returns {Object} Snapshot object
+ */
 function fullSnapshot() {
   // Provide the minimum to recreate UI
   return {
@@ -397,6 +410,11 @@ function fullSnapshot() {
   };
 }
 
+/**
+ * Send message to specific WebSocket client
+ * @param {WebSocket} ws - WebSocket client
+ * @param {Object} obj - Object to send
+ */
 function send(ws, obj) {
   try {
     ws.send(JSON.stringify(obj));
@@ -405,19 +423,8 @@ function send(ws, obj) {
   }
 }
 
-function sanitizeName(name) {
-  if (!name || typeof name !== "string") return "Player";
-  return name.trim().slice(0, 16) || "Player";
-}
 
-function logEvent(game, message) {
-  const entry = { ts: Date.now(), message };
-  if (!game.event_log) game.event_log = [];
-  game.event_log.push(entry);
-  if (game.event_log.length > 100) game.event_log.shift();
-  broadcast({ type: "eventLog", event: entry });
-}
-
+// WebSocket connection handling
 // create a bot id
 function makeBotId() {
   return `bot-${token8().toLowerCase()}`;
@@ -566,6 +573,14 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // Broadcast wrapper to also log events
+    const broadcastWithLog = (obj) => {
+      if (obj.type === "eventLog") {
+        broadcast(obj);
+      } else {
+        broadcast(obj);
+      }
+    };
     switch (msg.type) {
       case "roll_dice":
         if (!msg.playerId || !msg.gameCode) return;
@@ -735,10 +750,12 @@ wss.on("connection", (ws) => {
         break;
     }
 
-    return;
+    // Route message to handler
+    handleMessage(msg, state, ws, send, broadcastWithLog);
   });
 
   ws.on("close", () => {
+    // Connection closed - could track disconnections here
 
   });
 });
@@ -749,20 +766,28 @@ const interval = setInterval(() => {
     if (!ws.isAlive) {
       try {
         ws.terminate();
+      } catch (e) {
+        // Ignore termination errors
+      }
       } catch (e) { }
       continue;
     }
     ws.isAlive = false;
     try {
       ws.ping();
+    } catch (e) {
+      // Ignore ping errors
+    }
     } catch (e) { }
   }
 }, PING_INTERVAL_MS);
 
+// Start server
 server.listen(PORT, () => {
   console.log(`✅ Vex game server listening on http://${HOST}:${PORT}`);
 });
 
+// Graceful shutdown
 process.on("SIGINT", () => {
   clearInterval(interval);
   process.exit(0);
