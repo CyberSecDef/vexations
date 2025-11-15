@@ -132,6 +132,24 @@
     // ========================================================================
     // EVENT LISTENERS
     // ========================================================================
+    ]
+
+    //normal path through gameboard
+    globalThis.path = [{ "x": 9, "y": 2 }, { "x": 10, "y": 2 }, { "x": 11, "y": 2 }, 
+        { "x": 11, "y": 3 }, { "x": 11, "y": 4 }, { "x": 11, "y": 5 }, { "x": 11, "y": 6 }, 
+        { "x": 11, "y": 7 }, { "x": 12, "y": 7 }, { "x": 13, "y": 7 }, { "x": 14, "y": 7 }, 
+        { "x": 15, "y": 7 }, { "x": 16, "y": 7 }, { "x": 16, "y": 8 }, { "x": 16, "y": 9 }, 
+        { "x": 16, "y": 10 }, { "x": 16, "y": 11 }, { "x": 15, "y": 11 }, { "x": 14, "y": 11 }, 
+        { "x": 13, "y": 11 }, { "x": 12, "y": 11 }, { "x": 11, "y": 11 }, { "x": 11, "y": 12 }, 
+        { "x": 11, "y": 13 }, { "x": 11, "y": 14 }, { "x": 11, "y": 15 }, { "x": 11, "y": 16 }, 
+        { "x": 10, "y": 16 }, { "x": 9, "y": 16 }, { "x": 8, "y": 16 }, { "x": 7, "y": 16 }, 
+        { "x": 7, "y": 15 }, { "x": 7, "y": 14 }, { "x": 7, "y": 13 }, { "x": 7, "y": 12 }, 
+        { "x": 7, "y": 11 }, { "x": 6, "y": 11 }, { "x": 5, "y": 11 }, { "x": 4, "y": 11 }, 
+        { "x": 3, "y": 11 }, { "x": 2, "y": 11 }, { "x": 2, "y": 10 }, { "x": 2, "y": 9 }, 
+        { "x": 2, "y": 8 }, { "x": 2, "y": 7 }, { "x": 3, "y": 7 }, { "x": 4, "y": 7 }, 
+        { "x": 5, "y": 7 }, { "x": 6, "y": 7 }, { "x": 7, "y": 7 }, { "x": 7, "y": 6 }, 
+        { "x": 7, "y": 5 }, { "x": 7, "y": 4 }, { "x": 7, "y": 3 }, { "x": 7, "y": 2 }, 
+        { "x": 8, "y": 2 }]
 
     gameCodeInput.addEventListener('keyup', (event) => {
         gameCodeInput.value = gameCodeInput.value.replaceAll(/[^a-zA-Z0-9]+/g, "").substr(0, 8);
@@ -182,6 +200,144 @@
     /**
      * Get home positions for a specific player
      */
+            wsSafeSend({ type: 'join_game', playerId: player.id, gameCode: gameCodeInput.value })
+            playAreaContainer.classList.remove('d-none')
+            splashDiv.classList.add('d-none')
+        }, 1000)
+    })
+
+    function handleMessage(msg) {
+        console.log(msg)
+        switch (msg.type) {
+            case 'dice_roll':
+                if (!msg.robot) {
+                    rollDie({ duration: 1600, tick: 60, result: msg.dice })
+                }
+                break;
+            case 'game_info':
+                game.setCode(msg.game.code)
+                currentGameState = msg.game;
+
+                // Find current player's index
+                currentPlayerIndex = -1;
+                msg.game.players.forEach((p, i) => {
+                    if (p.id === player.id) {
+                        currentPlayerIndex = i;
+                    }
+                });
+
+                colorCells()
+                disableAllMarbleClicks();
+
+                diceRollBtn.className = '';
+                diceRollBtn.classList.add('rounded', 'btn', `btn-${PLAYER_CLASSES[msg.game.player_index]}`)
+
+                const isMyTurn = msg.game.players[msg.game.player_index] && msg.game.players[msg.game.player_index].id ? msg.game.players[msg.game.player_index].id == player.id : false;
+                const awaitingRoll = msg.game.phase === 'awaiting_roll';
+                const awaitingMove = msg.game.phase === 'awaiting_move';
+
+                if (isMyTurn && awaitingRoll) {
+                    diceRollBtn.disabled = false;
+                } else {
+                    diceRollBtn.disabled = true;
+                }
+
+                msg.game.players.forEach((p, i) => {
+                    let homeSpaceClass = `board-space border-2 border border-${PLAYER_CLASSES[i]} bg-${PLAYER_CLASSES[i]}`
+                    p.marbles.forEach((m, j) => {
+                        if (m == 101) {
+                            $(`div.board-space[data-x='7'][data-y='0']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 102) {
+                            $(`div.board-space[data-x='8'][data-y='0']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 103) {
+                            $(`div.board-space[data-x='10'][data-y='0']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 104) {
+                            $(`div.board-space[data-x='11'][data-y='0']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 201) {
+                            $(`div.board-space[data-x='18'][data-y='7']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 202) {
+                            $(`div.board-space[data-x='18'][data-y='8']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 203) {
+                            $(`div.board-space[data-x='18'][data-y='10']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 204) {
+                            $(`div.board-space[data-x='18'][data-y='11']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 301) {
+                            $(`div.board-space[data-x='11'][data-y='18']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 302) {
+                            $(`div.board-space[data-x='10'][data-y='18']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 303) {
+                            $(`div.board-space[data-x='8'][data-y='18']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 304) {
+                            $(`div.board-space[data-x='7'][data-y='18']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 401) {
+                            $(`div.board-space[data-x='0'][data-y='11']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 402) {
+                            $(`div.board-space[data-x='0'][data-y='10']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 403) {
+                            $(`div.board-space[data-x='0'][data-y='8']`).removeClass().addClass(homeSpaceClass)
+                        }
+                        if (m == 404) {
+                            $(`div.board-space[data-x='0'][data-y='7']`).removeClass().addClass(homeSpaceClass)
+                        }
+
+                        if (m < 100) {
+                            $(`div.board-space[data-x='${path[m].x}'][data-y='${path[m].y}']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`)
+                        }
+
+                        if (m === CENTER_POSITION) {
+                            const c = getMarbleCoords(m, i);
+                            if (c) $(`div.board-space[data-x='${c.x}'][data-y='${c.y}']`).removeClass().addClass(`board-space bg-${PLAYER_CLASSES[i]}`);
+                        }
+                    })
+                })
+
+                if (isMyTurn && awaitingMove) {
+                    enableMarbleClicks();
+                }
+
+                break;
+            case 'identified':
+                player.setName(msg.player.name)
+                break
+            case 'eventLog':
+                if (msg.event) {
+                    const eventLog = document.getElementById('eventLog');
+                    if (eventLog) {
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'line';
+                        const time = new Date(msg.event.ts).toLocaleTimeString();
+                        eventDiv.innerHTML = `<span class="ts">${time}</span>${msg.event.message}`;
+                        eventLog.insertBefore(eventDiv, eventLog.firstChild);
+
+                        // Keep only last 20 events
+                        while (eventLog.children.length > 20) {
+                            eventLog.removeChild(eventLog.lastChild);
+                        }
+                    }
+                }
+                break
+            case 'hello':
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Helper functions for game logic
     const getHomePositions = (playerIndex) => {
         const homes = [
             [101, 102, 103, 104],
@@ -228,6 +384,63 @@
     /**
      * Check if position is a star position
      */
+    const canMoveMarble = (marbleIndex, playerIndex, diceValue) => {
+        if (!currentGameState || !currentGameState.players[playerIndex]) return false;
+        const player = currentGameState.players[playerIndex];
+        const currentPos = player.marbles[marbleIndex];
+        const validDests = getValidDestinations(currentPos, diceValue, playerIndex, player.marbles, marbleIndex);
+        return validDests.length > 0;
+    };
+
+    const enableMarbleClicks = () => {
+        if (!currentGameState || currentPlayerIndex === -1) return;
+        if (currentGameState.phase !== 'awaiting_move') return;
+        if (currentGameState.players[currentGameState.player_index].id !== player.id) return;
+
+        const myPlayer = currentGameState.players[currentPlayerIndex];
+        const diceValue = currentGameState.last_roll;
+
+        myPlayer.marbles.forEach((marblePos, marbleIndex) => {
+            if (canMoveMarble(marbleIndex, currentPlayerIndex, diceValue)) {
+                const coords = getMarbleCoords(marblePos, currentPlayerIndex);
+                if (coords) {
+                    const elem = $(`div.board-space[data-x='${coords.x}'][data-y='${coords.y}']`);
+                    elem.addClass('clickable-marble');
+                    elem.attr('data-marble-index', marbleIndex);
+                }
+            }
+        });
+    };
+
+    const getMarbleCoords = (position, playerIndex) => {
+        if (position < 100) {
+            return path[position];
+        }
+
+        const homeCoords = {
+            101: { x: 7, y: 0 }, 102: { x: 8, y: 0 }, 103: { x: 10, y: 0 }, 104: { x: 11, y: 0 },
+            201: { x: 18, y: 7 }, 202: { x: 18, y: 8 }, 203: { x: 18, y: 10 }, 204: { x: 18, y: 11 },
+            301: { x: 11, y: 18 }, 302: { x: 10, y: 18 }, 303: { x: 8, y: 18 }, 304: { x: 7, y: 18 },
+            401: { x: 0, y: 11 }, 402: { x: 0, y: 10 }, 403: { x: 0, y: 8 }, 404: { x: 0, y: 7 }
+        };
+        if (position === CENTER_POSITION) return { x: 9, y: 9 };
+        return homeCoords[position] || null;
+    };
+
+    const disableAllMarbleClicks = () => {
+        $('.clickable-marble').removeClass('clickable-marble').removeAttr('data-marble-index');
+    };
+
+    const disableAllDestinations = () => {
+        $('.clickable-destination').removeClass('clickable-destination').removeAttr('data-destination');
+    };
+
+    // Track selected marble
+    let selectedMarble = null;
+
+    // Star positions matching server
+    const STAR_POSITIONS = [7, 21, 35, 49];
+
     const isStarPosition = (position) => {
         return STAR_POSITIONS.includes(position);
     };
@@ -282,17 +495,25 @@
 
             // Normal forward 1 step along path
             const nextPos = (pos + 1) % 56;
-            queue.push({ pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+            // do not allow passing through your own marble - skip this step if blocked
+            if (!wouldBlockSelf(allMarbles, movingIndex, nextPos)) {
+                queue.push({ pos: nextPos, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+            }
 
             // If nextPos is a STAR, you can optionally move INTO the CENTER
             if (isStarPosition(nextPos)) {
-                queue.push({ pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+                // moving from a star into the center: only allow if center isn't occupied by own marble
+                if (!wouldBlockSelf(allMarbles, movingIndex, CENTER_POSITION)) {
+                    queue.push({ pos: CENTER_POSITION, stepsLeft: stepsLeft - 1, visitedStars: new Set(visitedStars) });
+                }
             }
 
             // Star teleporting: only allowed if we START on a star
             if (pos === currentPosition && isStarPosition(pos)) {
                 for (const starPos of STAR_POSITIONS) {
                     if (starPos !== pos && !visitedStars.has(starPos)) {
+                        // don't teleport to a star occupied by your own marble
+                        if (wouldBlockSelf(allMarbles, movingIndex, starPos)) continue;
                         const newVisited = new Set(visitedStars);
                         newVisited.add(starPos);
                         queue.push({ pos: starPos, stepsLeft: stepsLeft - 1, visitedStars: newVisited });
