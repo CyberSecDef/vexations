@@ -22,8 +22,8 @@ function checkForWinner(game, state, broadcast) {
       logEvent(game, `${game.winner.name} has won the game!`, broadcast);
       // broadcast both game_info and explicit game_over
       if (broadcast) {
-        broadcast({ type: 'game_info', game: game, s: state });
-        broadcast({ type: 'game_over', winner: game.winner, game: game, s: state });
+        broadcast({ type: 'game_info', game: game, s: state }, game.code);
+        broadcast({ type: 'game_over', winner: game.winner, game: game, s: state }, game.code);
       }
       return game.winner;
     }
@@ -62,7 +62,7 @@ function restartGame(game, state, broadcast) {
 
   if (broadcast) {
     logEvent(game, `Game restarted with new code ${newCode}`, broadcast);
-    broadcast({ type: 'game_info', game: game, s: state });
+    broadcast({ type: 'game_info', game: game, s: state }, game.code);
   }
 
   return newCode;

@@ -10,13 +10,26 @@ function setWebSocketServer(wss) {
   _wss = wss;
 }
 
-function broadcast(obj) {
+/**
+ * Broadcast a message to connected clients.
+ * If gameCode is provided, only clients with ws.gameCode === gameCode will receive it.
+ * Otherwise the message is sent to all connected clients.
+ */
+function broadcast(obj, gameCode) {
   if (!_wss || _wss.clients.size === 0) return;
   const payload = JSON.stringify(obj);
   for (const client of _wss.clients) {
-    if (client.readyState === 1) {
-      try { client.send(payload); } catch (e) { /* noop */ }
-    }
+    try {
+      if (client.readyState !== 1) continue;
+      if (gameCode) {
+        // Only send to clients that are associated with the same game code
+        if (client.gameCode && client.gameCode === gameCode) {
+          client.send(payload);
+        }
+      } else {
+        client.send(payload);
+      }
+    } catch (e) { /* noop */ }
   }
 }
 

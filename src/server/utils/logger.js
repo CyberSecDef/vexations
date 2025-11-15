@@ -12,7 +12,10 @@ function logEvent(game, message, broadcast) {
   if (game.event_log.length > 100) game.event_log.shift();
   
   if (broadcast) {
-    broadcast({ type: "eventLog", event: entry });
+    // If the game has a code, scope the event log broadcast to that game.
+    if (game && game.code) {
+      broadcast({ type: "eventLog", event: entry }, game.code);
+    }
   }
 }
 

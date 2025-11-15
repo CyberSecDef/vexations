@@ -36,7 +36,7 @@ function handleAddBot(ws, msg, state, broadcast) {
 
     try { send(ws, { type: 'add_bot_ack', ok: true, botId: botId, botName: botName, botIndex: botIndex }); } catch (e) {}
 
-    broadcast({ type: 'game_info', game: game, s: state });
+  broadcast({ type: 'game_info', game: game, s: state }, game.code);
 
     return;
   } catch (e) {

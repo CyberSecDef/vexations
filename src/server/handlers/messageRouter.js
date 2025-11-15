@@ -56,7 +56,7 @@ function handleRollDice(ws, msg, state, broadcast) {
 
   const success = handleDiceRoll(game, msg.playerId, broadcast);
   if (success) {
-    broadcast({ type: "game_info", game: game, s: state });
+    broadcast({ type: "game_info", game: game, s: state }, game.code);
   }
 }
 
@@ -78,7 +78,7 @@ function handleMoveMarble(ws, msg, state, broadcast) {
   );
 
   if (success) {
-    broadcast({ type: "game_info", game: game, s: state });
+    broadcast({ type: "game_info", game: game, s: state }, game.code);
   }
 }
 
@@ -89,6 +89,9 @@ function handleHeartbeat(ws, msg, state) {
   const game = getGame(state, msg.gameCode);
   if (!game) return;
   if (!game.players || game.players.length === 0) return;
+
+  // Associate this websocket with the game code so broadcasts can be scoped
+  ws.gameCode = msg.gameCode;
 
   send(ws, {
     type: "game_info",
@@ -106,6 +109,9 @@ function handleJoinGame(ws, msg, state) {
 
   const success = addPlayerToGame(game, msg.playerId);
   if (success) {
+    // Associate this websocket with the game code so broadcasts can be scoped
+    ws.gameCode = msg.gameCode;
+
     send(ws, {
       type: "game_info",
       game: game,
@@ -118,6 +124,8 @@ function handleNewGame(ws, msg, state) {
   const game = createGame();
   state.games[game.code] = game;
 
+  // When creating a new game, associate this websocket with the new game code
+  ws.gameCode = game.code;
   send(ws, { type: "game_info", game: game, s: state });
 }
 

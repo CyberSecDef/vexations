@@ -39,7 +39,7 @@ function handleDiceRoll(game, playerId, broadcast) {
     advanceTurn(game);
   }
 
-  broadcast({ type: "dice_roll", dice: diceValue });
+  broadcast({ type: "dice_roll", dice: diceValue }, game.code);
   return true;
 }
 

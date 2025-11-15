@@ -68,13 +68,13 @@ async function runBotTurnIfNeeded(game, state, broadcast) {
       const diceValue = rollDice();
       game.last_roll = diceValue;
       game.phase = 'awaiting_move';
-      broadcast({ type: 'dice_roll', dice: diceValue });
-      broadcast({ type: 'game_info', game: game, s: state });
+  broadcast({ type: 'dice_roll', dice: diceValue }, game.code);
+  broadcast({ type: 'game_info', game: game, s: state }, game.code);
 
       if (!hasValidMoves(game, pIndex, diceValue)) {
         logEvent(game, `Bot ${state.players[pid].name} has no valid moves. Turn skipped.`, broadcast);
         advanceTurn(game);
-        broadcast({ type: 'game_info', game: game, s: state });
+  broadcast({ type: 'game_info', game: game, s: state }, game.code);
         game._botRunning = false;
         return;
       }
@@ -86,7 +86,7 @@ async function runBotTurnIfNeeded(game, state, broadcast) {
       if (!choice) {
         logEvent(game, `Bot ${state.players[pid].name} found no valid choice. Turn skipped.`, broadcast);
         advanceTurn(game);
-        broadcast({ type: 'game_info', game: game, s: state });
+  broadcast({ type: 'game_info', game: game, s: state }, game.code);
         game._botRunning = false;
         return;
       }
@@ -95,7 +95,7 @@ async function runBotTurnIfNeeded(game, state, broadcast) {
       const validDests = getValidDestinations(playerObj.marbles[choice.marbleIndex], game.last_roll, pIndex, playerObj.marbles, choice.marbleIndex);
       if (!validDests.includes(choice.destination)) {
         advanceTurn(game);
-        broadcast({ type: 'game_info', game: game, s: state });
+        broadcast({ type: 'game_info', game: game, s: state }, game.code);
         game._botRunning = false;
         return;
       }
@@ -131,7 +131,7 @@ async function runBotTurnIfNeeded(game, state, broadcast) {
         advanceTurn(game);
       }
 
-      broadcast({ type: 'game_info', game: game, s: state });
+  broadcast({ type: 'game_info', game: game, s: state }, game.code);
 
       if (isBotPlayer(state, game.players[game.player_index].id)) {
         setTimeout(() => runBotTurnIfNeeded(game, state, broadcast).catch(() => {}), 250);
