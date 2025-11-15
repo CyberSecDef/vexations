@@ -14,23 +14,13 @@ Vexations is a web-based multiplayer board game where players race their marbles
 ## Project Structure
 
 ```
-├── server.js              # Main Express server (refactored, ~140 lines)
-├── src/                   # Server-side modules
-│   ├── config/
-│   │   └── constants.js   # Game configuration and constants
-│   ├── game/
-│   │   ├── rules.js       # Game rules and movement validation
-│   │   ├── state.js       # Game state management
-│   │   └── validation.js  # Input validation utilities
-│   └── websocket/
-│       └── handlers.js    # WebSocket message handlers
+├── server.js           # Express server with WebSocket support
 ├── public/
-│   ├── index.html         # Game UI
-│   ├── client.js          # Client-side game logic (organized)
-│   ├── styles.css         # Custom styles
+│   ├── index.html      # Game UI
+│   ├── client.js       # Client-side game logic
+│   ├── styles.css      # Custom styles
 │   └── jquery-3.7.1.min.js
 ├── package.json
-├── .eslintrc.json         # ESLint configuration
 └── .gitignore
 ```
 
@@ -41,34 +31,6 @@ Vexations is a web-based multiplayer board game where players race their marbles
 - **Frontend**: Vanilla JavaScript with jQuery
 - **UI Framework**: Bootstrap 5.3.8
 - **Game State**: In-memory state management
-- **Code Quality**: ESLint for consistent code style
-
-## Recent Refactoring (November 2024)
-
-The codebase underwent a major refactoring to improve maintainability and code quality:
-
-### Server-Side Improvements
-- Extracted game logic into modular components under `src/` directory
-- Created separate modules for: constants, game rules, state management, validation, and WebSocket handlers
-- Reduced server.js from 433 to ~140 lines (67% reduction)
-- Added comprehensive JSDoc documentation
-- Improved error handling and validation
-
-### Client-Side Improvements
-- Reorganized client.js with clear section headers and logical grouping
-- Consolidated marble coordinate mapping
-- Simplified rendering functions
-- Removed unused code (marchCells function)
-- Added JSDoc comments
-- Improved code readability by 40%
-
-### Code Quality
-- Added ESLint configuration for consistent code style
-- Removed code duplication between client and server
-- Extracted magic numbers into named constants
-- Improved naming conventions
-- Separated concerns (game logic, UI, networking)
-- Zero security vulnerabilities (verified with CodeQL)
 
 ## Configuration
 

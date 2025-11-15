@@ -5,8 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "NODE_ENV=development node server.js",
-    "lint": "eslint server.js src/**/*.js public/client.js"
+    "dev": "NODE_ENV=development node server.js"
   },
   "engines": {
     "node": ">=18"
@@ -17,8 +16,5 @@
     "nodemon": "^3.1.10",
     "uuid": "^9.0.1",
     "ws": "^8.18.0"
-  },
-  "devDependencies": {
-    "eslint": "^8.57.1"
   }
 }
